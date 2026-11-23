@@ -81,13 +81,30 @@ class AutoAdServeController extends Controller
             $title = e($creative->title);
             $body = e((string) $creative->body_text);
 
-            $mediaTag = $creative->media_type === 'video'
-                ? "<video src=\"{$mediaUrl}\" autoplay muted loop playsinline preload=\"metadata\" style=\"max-width:100%;height:auto;border-radius:6px;\"></video>"
-                : "<img src=\"{$mediaUrl}\" alt=\"{$title}\" loading=\"lazy\" style=\"max-width:100%;height:auto;border:0;border-radius:6px;\">";
+            // Dimensions strictes selon le format choisi
+            $dimensions = match ($format) {
+                'banner_728x90' => ['w' => '728px', 'h' => '90px'],
+                'square_300x250' => ['w' => '300px', 'h' => '250px'],
+                'vertical_160x600' => ['w' => '160px', 'h' => '600px'],
+                default => null,
+            };
 
-            $html = $format === 'native'
-                ? "<a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:flex;gap:12px;align-items:center;text-decoration:none;color:inherit;border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin:16px 0;background:#fff;\"><img src=\"{$mediaUrl}\" alt=\"{$title}\" loading=\"lazy\" style=\"width:72px;height:72px;object-fit:cover;border-radius:8px;\"><div><div style=\"font-weight:600;font-size:14px;\">{$title}</div><div style=\"font-size:12px;color:#6b7280;\">{$body}</div></div></a>"
-                : "<div class=\"cm-rec-wrap\" style=\"margin:16px auto;text-align:center;\"><a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:inline-block;max-width:100%;\">{$mediaTag}</a></div>";
+            if ($format === 'native') {
+                $thumbTag = $creative->media_type === 'video'
+                    ? "<video src=\"{$mediaUrl}\" autoplay muted loop playsinline preload=\"metadata\" style=\"width:72px;height:72px;object-fit:cover;border-radius:8px;flex-shrink:0;\"></video>"
+                    : "<img src=\"{$mediaUrl}\" alt=\"{$title}\" loading=\"lazy\" style=\"width:72px;height:72px;object-fit:cover;border-radius:8px;flex-shrink:0;\">";
+
+                $html = "<a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:flex;gap:12px;align-items:center;max-width:720px;margin:16px auto;text-decoration:none;color:inherit;border:1px solid #e5e7eb;border-radius:10px;padding:10px;background:#fff;box-sizing:border-box;\">{$thumbTag}<div><div style=\"font-weight:600;font-size:14px;\">{$title}</div><div style=\"font-size:12px;color:#6b7280;\">{$body}</div></div></a>";
+            } else {
+                $w = $dimensions['w'] ?? '300px';
+                $h = $dimensions['h'] ?? '250px';
+                $mediaStyle = "width:100%;height:{$h};object-fit:cover;border:0;border-radius:6px;display:block;";
+                $mediaTag = $creative->media_type === 'video'
+                    ? "<video src=\"{$mediaUrl}\" autoplay muted loop playsinline preload=\"metadata\" style=\"{$mediaStyle}\"></video>"
+                    : "<img src=\"{$mediaUrl}\" alt=\"{$title}\" loading=\"lazy\" style=\"{$mediaStyle}\">";
+
+                $html = "<div class=\"cm-rec-wrap\" style=\"width:{$w};max-width:100%;height:{$h};margin:16px auto;overflow:hidden;border-radius:6px;box-sizing:border-box;\"><a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:block;width:100%;height:100%;\">{$mediaTag}</a></div>";
+            }
 
             $placements[] = [
                 'format' => $format,
@@ -111,14 +128,21 @@ class AutoAdServeController extends Controller
     items.forEach(function(item){
       var box=document.createElement('div');
       box.className='cm-auto-slot';
+      box.style.cssText='position:static;display:block;clear:both;width:100%;margin:12px 0;';
       box.innerHTML=item.html;
       var target=null;
       if(item.format==='banner_728x90'){
-        target=document.querySelector('main, article, header');
-        if(target)target.prepend(box);
+        target=document.querySelector('main, article');
+        if(target){target.prepend(box);}
+        else{
+          var hdr=document.querySelector('header, nav');
+          if(hdr&&hdr.parentNode){hdr.insertAdjacentElement('afterend',box);}
+          else if(document.body){document.body.prepend(box);}
+        }
       }else if(item.format==='vertical_160x600'||item.format==='square_300x250'){
         target=document.querySelector('aside, .sidebar, main, article');
-        if(target)target.appendChild(box);
+        if(target){target.appendChild(box);}
+        else if(document.body){document.body.appendChild(box);}
       }else{
         var paras=document.querySelectorAll('article p, main p, p');
         if(paras.length>=2){paras[1].insertAdjacentElement('afterend',box);}
