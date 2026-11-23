@@ -47,3 +47,19 @@ Route::middleware('demo')->prefix('demo')->name('demo.')->group(function () {
     Route::post('/simulate-deposit', [DemoController::class, 'simulateDeposit'])->name('simulate-deposit');
     Route::post('/simulate-fraud', [DemoController::class, 'simulateFraud'])->name('simulate-fraud');
 });
+
+Route::get('/create-symlink', function () {
+    if (is_link(public_path('storage'))) {
+        return 'Le lien symbolique existe déjà !';
+    }
+
+    try {
+        symlink(
+            storage_path('app/public'),
+            public_path('storage')
+        );
+        return 'Lien symbolique créé avec succès !';
+    } catch (\Exception $e) {
+        return 'Erreur : ' . $e->getMessage();
+    }
+});
