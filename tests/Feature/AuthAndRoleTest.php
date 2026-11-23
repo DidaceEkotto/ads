@@ -40,7 +40,13 @@ class AuthAndRoleTest extends TestCase
         $this->assertSame(UserRole::Advertiser, $user->role);
         $this->assertNotNull($user->advertiserProfile);
         $this->assertNotNull($user->wallet);
-        $this->assertSame(0, $user->wallet->available_balance_xaf);
+        $this->assertSame(10000, $user->wallet->available_balance_xaf);
+        $this->assertDatabaseHas('transactions', [
+            'wallet_id' => $user->wallet->id,
+            'amount_xaf' => 10000,
+            'direction' => 'credit',
+            'status' => 'completed',
+        ]);
     }
 
     public function test_publisher_can_register_and_cannot_access_advertiser_or_admin_routes(): void

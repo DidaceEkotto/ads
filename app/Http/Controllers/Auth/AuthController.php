@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Enums\TransactionType;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
@@ -14,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -90,7 +92,22 @@ class AuthController extends Controller
                 'password' => $request->validated('password'),
             ]);
 
-            Wallet::query()->create(['user_id' => $user->id]);
+            // Crédit de bienvenue de 10 000 FCFA pour les tests sur chaque nouveau compte
+            $wallet = Wallet::query()->create([
+                'user_id' => $user->id,
+                'available_balance_xaf' => 10000,
+            ]);
+
+            $wallet->transactions()->create([
+                'reference' => 'WELCOME-'.strtoupper(Str::random(10)),
+                'type' => TransactionType::Adjustment,
+                'direction' => 'credit',
+                'amount_xaf' => 10000,
+                'balance_after_xaf' => 10000,
+                'status' => 'completed',
+                'gateway' => 'internal',
+                'description' => __('Crédit de bienvenue (test) à l\'inscription'),
+            ]);
 
             if ($role === UserRole::Advertiser) {
                 AdvertiserProfile::query()->create([
