@@ -76,7 +76,7 @@ class CampaignController extends Controller
             'pricing' => [
                 'daily_campaign_cost_xaf' => (int) Setting::getValue('daily_campaign_cost_xaf', 2000),
                 'cpc_unit_price_xaf' => (int) Setting::getValue('cpc_unit_price_xaf', 50),
-                'view_unit_price_xaf' => (int) Setting::getValue('view_unit_price_xaf', 5),
+                'view_unit_price_xaf' => (int) Setting::getValue('view_unit_price_xaf', 3),
             ],
         ]);
     }
@@ -95,7 +95,7 @@ class CampaignController extends Controller
         // Tarifs calculés strictement côté serveur depuis les paramètres Admin
         $dailyCost = (int) Setting::getValue('daily_campaign_cost_xaf', 2000);
         $cpcPrice = (int) Setting::getValue('cpc_unit_price_xaf', 50);
-        $viewPrice = (int) Setting::getValue('view_unit_price_xaf', 5);
+        $viewPrice = (int) Setting::getValue('view_unit_price_xaf', 3);
 
         $durationDays = (int) $request->validated('duration_days');
         $totalBudget = $durationDays * $dailyCost;
@@ -223,7 +223,7 @@ class CampaignController extends Controller
             'pricing' => [
                 'daily_campaign_cost_xaf' => (int) Setting::getValue('daily_campaign_cost_xaf', 2000),
                 'cpc_unit_price_xaf' => (int) Setting::getValue('cpc_unit_price_xaf', 50),
-                'view_unit_price_xaf' => (int) Setting::getValue('view_unit_price_xaf', 5),
+                'view_unit_price_xaf' => (int) Setting::getValue('view_unit_price_xaf', 3),
             ],
         ]);
     }

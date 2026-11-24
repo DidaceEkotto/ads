@@ -20,7 +20,7 @@ class SettingSeeder extends Seeder
             ['referral_bonus_percent', 5, 'integer', 'Bonus de parrainage (%) sur les recharges des filleuls'],
             ['daily_campaign_cost_xaf', 2000, 'integer', 'Coût journalier d\'une campagne en FCFA'],
             ['cpc_unit_price_xaf', 50, 'integer', 'Prix unitaire d\'un clic sur lien en FCFA'],
-            ['view_unit_price_xaf', 5, 'integer', 'Prix d\'une vue visible au scroll sur site en FCFA'],
+            ['view_unit_price_xaf', 3, 'integer', 'Prix d\'une vue visible unique au scroll sur site en FCFA'],
             ['min_social_followers', 500, 'integer', 'Nombre minimum d\'abonnés pour un compte social éditeur'],
             ['social_post_min_hours', 48, 'integer', 'Durée minimale de maintien d\'un post sponsorisé (en heures)'],
             ['support_whatsapp', 'https://wa.me/237600000000', 'string', 'Lien WhatsApp du support client'],

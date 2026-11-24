@@ -67,6 +67,8 @@ class AdServeController extends Controller
         $viewToken = Crypt::encryptString(json_encode([
             'campaign_id' => $creative->campaign_id,
             'publisher_id' => $zone->site->publisher_id,
+            'site_id' => $zone->site_id,
+            'ad_zone_id' => $zone->id,
             'exp' => now()->addHours(6)->timestamp,
         ], JSON_THROW_ON_ERROR));
         $imgUrl = $creative->mediaUrl();

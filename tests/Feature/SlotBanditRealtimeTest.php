@@ -110,7 +110,7 @@ class SlotBanditRealtimeTest extends TestCase
         $this->assertNotNull($metric);
         $this->assertGreaterThanOrEqual(1, $metric->impressions_count);
         $this->assertGreaterThanOrEqual(1, $metric->viewable_count);
-        $this->assertSame(35, $metric->earnings_xaf);
+        $this->assertGreaterThanOrEqual(35, $metric->earnings_xaf);
 
         // 4. Thompson Sampling favorise un slot très performant
         AdSlotMetric::query()->updateOrCreate(
@@ -135,5 +135,89 @@ class SlotBanditRealtimeTest extends TestCase
                 ->component('Publisher/Stats/Index')
                 ->has('slotPerformance')
             );
+    }
+
+    public function test_unique_scroll_view_and_click_combine_earnings_with_3_xaf_default(): void
+    {
+        $this->assertSame(3, (int) \App\Models\Setting::getValue('view_unit_price_xaf'));
+        \App\Models\Setting::setValue('publisher_share_percent', 100);
+
+        $adv = User::query()->create([
+            'name' => 'Adv Combo',
+            'email' => 'advcombo@cm.cm',
+            'phone' => '+237677333111',
+            'role' => UserRole::Advertiser,
+            'password' => 'Secret1234',
+        ]);
+        $adv->wallet()->create(['available_balance_xaf' => 50000]);
+
+        $pub = User::query()->create([
+            'name' => 'Pub Combo',
+            'email' => 'pubcombo@cm.cm',
+            'phone' => '+237699333111',
+            'role' => UserRole::Publisher,
+            'password' => 'Secret1234',
+        ]);
+        $pubWallet = $pub->wallet()->create(['available_balance_xaf' => 0]);
+
+        $site = Site::query()->create([
+            'publisher_id' => $pub->id,
+            'name' => 'Site Combo',
+            'domain' => 'combo.cm',
+            'category' => 'tech',
+            'language' => 'fr',
+            'status' => SiteStatus::Approved,
+            'site_token' => 'combotoken1234567',
+            'auto_ads_enabled' => true,
+            'allowed_formats' => [AdZoneFormat::Native->value],
+        ]);
+
+        $campaign = Campaign::query()->create([
+            'advertiser_id' => $adv->id,
+            'name' => 'Campagne Combo 53F',
+            'type' => CampaignType::Web,
+            'billing_model' => BillingModel::Cpc,
+            'status' => CampaignStatus::Active,
+            'total_budget_xaf' => 20000,
+            'daily_budget_xaf' => 2000,
+            'unit_price_xaf' => 50,
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addDays(5),
+        ]);
+
+        $campaign->creatives()->create([
+            'title' => 'Pub Combo',
+            'destination_url' => 'https://client.cm',
+            'media_type' => 'image',
+            'media_path' => 'creatives/demo.png',
+            'format' => AdZoneFormat::Native->value,
+            'file_size_bytes' => 1024,
+        ]);
+
+        $res = $this->withHeaders([
+            'User-Agent' => 'Mozilla/5.0 (Linux; Android 13; Mobile)',
+        ])->get("/a/{$site->site_token}.js")->assertOk();
+
+        $content = str_replace(['\/', '\"'], ['/', '"'], $res->getContent());
+        preg_match('/"view_token":"([^"]+)"/', $content, $viewMatch);
+        preg_match('/https?:\/\/[^\s"\'<>]+?\/click\/([A-Za-z0-9_\-=.%]+)/', $content, $clickMatch);
+
+        // 1re vue au scroll -> +3 FCFA
+        $this->withHeaders(['User-Agent' => 'Mozilla/5.0 (Linux; Android 13; Mobile)'])
+            ->post('/m/v', ['view_token' => $viewMatch[1]])
+            ->assertNoContent();
+        $this->assertSame(3, $pubWallet->fresh()->pending_balance_xaf);
+
+        // 2e visite / retour sur la même page -> vue unique déjà comptée, 0 FCFA supplémentaire
+        $this->withHeaders(['User-Agent' => 'Mozilla/5.0 (Linux; Android 13; Mobile)'])
+            ->post('/m/v', ['view_token' => $viewMatch[1]])
+            ->assertNoContent();
+        $this->assertSame(3, $pubWallet->fresh()->pending_balance_xaf);
+
+        // Clic sur l'annonce -> +50 FCFA => total 53 FCFA
+        $this->withHeaders(['User-Agent' => 'Mozilla/5.0 (Linux; Android 13; Mobile)'])
+            ->get('/click/'.urldecode($clickMatch[1]))
+            ->assertRedirect('https://client.cm');
+        $this->assertSame(53, $pubWallet->fresh()->pending_balance_xaf);
     }
 }

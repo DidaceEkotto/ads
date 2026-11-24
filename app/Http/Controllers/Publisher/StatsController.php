@@ -7,6 +7,7 @@ use App\Models\AdSlotMetric;
 use App\Models\Campaign;
 use App\Models\Click;
 use App\Models\Impression;
+use App\Models\Setting;
 use App\Models\Site;
 use App\Models\SocialPlacement;
 use Illuminate\Http\Request;
@@ -59,9 +60,25 @@ class StatsController extends Controller
             ')
             ->first();
 
+        $sharePercent = $user->publisherProfile?->custom_share_percent
+            ?? (int) Setting::getValue('publisher_share_percent', 70);
+
+        $viewGrossTotal = (int) Impression::query()
+            ->where('publisher_id', $user->id)
+            ->where('cost_xaf', '>', 0)
+            ->sum('cost_xaf');
+        $viewGrossToday = (int) Impression::query()
+            ->where('publisher_id', $user->id)
+            ->where('cost_xaf', '>', 0)
+            ->where('created_at', '>=', $todayStart)
+            ->sum('cost_xaf');
+
+        $viewEarningsTotal = (int) floor($viewGrossTotal * ($sharePercent / 100));
+        $viewEarningsToday = (int) floor($viewGrossToday * ($sharePercent / 100));
+
         $validClicks = (int) ($clickTotals->valid_clicks ?? 0);
         $blockedClicks = (int) ($clickTotals->blocked_clicks ?? 0);
-        $totalEarnings = (int) ($clickTotals->total_earnings ?? 0);
+        $totalEarnings = (int) ($clickTotals->total_earnings ?? 0) + $viewEarningsTotal;
         $ctr = $totalImpressions > 0 ? round(($validClicks / $totalImpressions) * 100, 2) : 0;
         $rpm = $totalImpressions > 0 ? (int) round(($totalEarnings / $totalImpressions) * 1000) : 0;
         $avgCpc = $validClicks > 0 ? (int) round($totalEarnings / $validClicks) : 0;
@@ -75,6 +92,7 @@ class StatsController extends Controller
                 'campaign_id',
                 DB::raw('COUNT(*) as impressions'),
                 DB::raw('COUNT(DISTINCT visitor_hash) as unique_visitors'),
+                DB::raw('COALESCE(SUM(cost_xaf), 0) as view_cost_xaf'),
             ])
             ->groupBy('campaign_id')
             ->get()
@@ -97,12 +115,13 @@ class StatsController extends Controller
         $campaignIds = $impByCampaign->keys()->merge($clkByCampaign->keys())->unique()->values();
         $campaignsMap = Campaign::query()->whereIn('id', $campaignIds)->get()->keyBy('id');
 
-        $byCampaign = $campaignIds->map(function ($cid) use ($campaignsMap, $impByCampaign, $clkByCampaign) {
+        $byCampaign = $campaignIds->map(function ($cid) use ($campaignsMap, $impByCampaign, $clkByCampaign, $sharePercent) {
             $camp = $campaignsMap->get($cid);
             $imp = $impByCampaign->get($cid);
             $clk = $clkByCampaign->get($cid);
             $views = (int) ($imp->impressions ?? 0);
             $clicks = (int) ($clk->valid_clicks ?? 0);
+            $viewEarning = (int) floor(((int) ($imp->view_cost_xaf ?? 0)) * ($sharePercent / 100));
 
             return [
                 'id' => (int) $cid,
@@ -113,8 +132,8 @@ class StatsController extends Controller
                 'valid_clicks' => $clicks,
                 'blocked_clicks' => (int) ($clk->blocked_clicks ?? 0),
                 'ctr' => $views > 0 ? round(($clicks / $views) * 100, 2) : 0,
-                'earnings_xaf' => (int) ($clk->earnings_xaf ?? 0),
-                'pending_xaf' => (int) ($clk->pending_xaf ?? 0),
+                'earnings_xaf' => (int) ($clk->earnings_xaf ?? 0) + $viewEarning,
+                'pending_xaf' => (int) ($clk->pending_xaf ?? 0) + $viewEarning,
                 'released_xaf' => (int) ($clk->released_xaf ?? 0),
             ];
         })->sortByDesc('earnings_xaf')->values();
@@ -123,9 +142,14 @@ class StatsController extends Controller
         $impBySite = Impression::query()
             ->where('publisher_id', $user->id)
             ->whereNotNull('site_id')
-            ->select(['site_id', DB::raw('COUNT(*) as impressions')])
+            ->select([
+                'site_id',
+                DB::raw('COUNT(*) as impressions'),
+                DB::raw('COALESCE(SUM(cost_xaf), 0) as view_cost_xaf'),
+            ])
             ->groupBy('site_id')
-            ->pluck('impressions', 'site_id');
+            ->get()
+            ->keyBy('site_id');
 
         $clkBySite = Click::query()
             ->where('publisher_id', $user->id)
@@ -140,8 +164,10 @@ class StatsController extends Controller
             ->get()
             ->keyBy('site_id');
 
-        $bySite = $user->sites()->get()->map(function (Site $site) use ($impBySite, $clkBySite) {
-            $views = (int) ($impBySite->get($site->id) ?? 0);
+        $bySite = $user->sites()->get()->map(function (Site $site) use ($impBySite, $clkBySite, $sharePercent) {
+            $impRow = $impBySite->get($site->id);
+            $views = (int) ($impRow->impressions ?? 0);
+            $viewEarning = (int) floor(((int) ($impRow->view_cost_xaf ?? 0)) * ($sharePercent / 100));
             $clk = $clkBySite->get($site->id);
             $clicks = (int) ($clk->valid_clicks ?? 0);
 
@@ -153,7 +179,7 @@ class StatsController extends Controller
                 'valid_clicks' => $clicks,
                 'blocked_clicks' => (int) ($clk->blocked_clicks ?? 0),
                 'ctr' => $views > 0 ? round(($clicks / $views) * 100, 2) : 0,
-                'earnings_xaf' => (int) ($clk->earnings_xaf ?? 0),
+                'earnings_xaf' => (int) ($clk->earnings_xaf ?? 0) + $viewEarning,
             ];
         })->sortByDesc('earnings_xaf')->values();
 
@@ -321,8 +347,8 @@ class StatsController extends Controller
                 'blocked_clicks' => $blockedClicks,
                 'ctr' => $ctr,
                 'total_earnings_xaf' => $totalEarnings,
-                'today_earnings_xaf' => (int) ($todayClickTotals->earnings ?? 0),
-                'pending_earnings_xaf' => (int) ($clickTotals->pending_earnings ?? 0),
+                'today_earnings_xaf' => (int) ($todayClickTotals->earnings ?? 0) + $viewEarningsToday,
+                'pending_earnings_xaf' => (int) ($clickTotals->pending_earnings ?? 0) + $viewEarningsTotal,
                 'released_earnings_xaf' => (int) ($clickTotals->released_earnings ?? 0),
                 'available_balance_xaf' => (int) $wallet->available_balance_xaf,
                 'pending_balance_xaf' => (int) $wallet->pending_balance_xaf,

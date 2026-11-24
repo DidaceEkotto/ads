@@ -53,7 +53,7 @@ class PlatformSettings extends Component
 
     public int $cpcUnitPriceXaf = 50;
 
-    public int $viewUnitPriceXaf = 5;
+    public int $viewUnitPriceXaf = 3;
 
     public string $supportWhatsapp = '';
 
@@ -79,7 +79,7 @@ class PlatformSettings extends Component
         $this->earningsHoldDays = (int) Setting::getValue('earnings_hold_days', 14);
         $this->dailyCampaignCostXaf = (int) Setting::getValue('daily_campaign_cost_xaf', 2000);
         $this->cpcUnitPriceXaf = (int) Setting::getValue('cpc_unit_price_xaf', 50);
-        $this->viewUnitPriceXaf = (int) Setting::getValue('view_unit_price_xaf', 5);
+        $this->viewUnitPriceXaf = (int) Setting::getValue('view_unit_price_xaf', 3);
         $this->supportWhatsapp = (string) Setting::getValue('support_whatsapp', '');
     }
 
