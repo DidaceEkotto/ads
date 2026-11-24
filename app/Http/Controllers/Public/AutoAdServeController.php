@@ -176,15 +176,46 @@ class AutoAdServeController extends Controller
     if(document.body){document.body.appendChild(box);return true;}
     return false;
   }
+  function adaptToContainer(box){
+    if(!box||!box.parentNode)return;
+    var parent=box.parentNode;
+    var cs=window.getComputedStyle(parent);
+    var padL=parseFloat(cs.paddingLeft)||0;
+    var padR=parseFloat(cs.paddingRight)||0;
+    var availW=Math.max(120,(parent.clientWidth||window.innerWidth)-padL-padR);
+    box.style.maxWidth=availW+'px';
+    box.style.width='100%';
+    var media=box.querySelector('img, video');
+    if(!media)return;
+    var adjust=function(){
+      var natW=media.naturalWidth||media.videoWidth||0;
+      var natH=media.naturalHeight||media.videoHeight||0;
+      media.style.maxWidth='100%';
+      media.style.height='auto';
+      media.style.objectFit='contain';
+      if(natW>0 && natW<=availW){
+        media.style.width=natW+'px';
+      }else{
+        media.style.width='100%';
+      }
+      if(natH>0 && window.innerHeight>0){
+        media.style.maxHeight=Math.min(natH,Math.round(window.innerHeight*0.7))+'px';
+      }
+    };
+    if(media.complete||media.readyState>=1){adjust();}
+    else{media.addEventListener('load',adjust,{once:true});media.addEventListener('loadedmetadata',adjust,{once:true});}
+  }
   function mount(){
     if(document.querySelector('.cm-auto-slot'))return;
     items.forEach(function(item){
       var box=document.createElement('div');
       box.className='cm-auto-slot';
       box.setAttribute('data-cm-slot',item.slot_key||'auto');
-      box.style.cssText='position:static;display:block;clear:both;width:100%;margin:12px 0;';
+      box.style.cssText='position:static;display:block;clear:both;width:100%;max-width:100%;margin:12px auto;box-sizing:border-box;';
       box.innerHTML=item.html;
       placeByHeuristic(box,item.slot_key||'below_navbar');
+      adaptToContainer(box);
+      window.addEventListener('resize',function(){adaptToContainer(box);},{passive:true});
       if(box.parentNode){
         var sent=false;
         function sendView(){
@@ -304,14 +335,14 @@ JS;
                 ? "<video src=\"{$mediaUrl}\" autoplay muted loop playsinline preload=\"metadata\" style=\"width:72px;height:72px;object-fit:cover;border-radius:8px;flex-shrink:0;\"></video>"
                 : "<img src=\"{$mediaUrl}\" alt=\"{$title}\" loading=\"lazy\" style=\"width:72px;height:72px;object-fit:cover;border-radius:8px;flex-shrink:0;\">";
 
-            $html = "<a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:flex;gap:12px;align-items:center;max-width:720px;margin:16px auto;text-decoration:none;color:inherit;border:1px solid #e5e7eb;border-radius:10px;padding:10px;background:#fff;box-sizing:border-box;\">{$thumbTag}<div><div style=\"font-weight:600;font-size:14px;\">{$title}</div><div style=\"font-size:12px;color:#6b7280;\">{$body}</div></div></a>";
+            $html = "<a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:flex;gap:12px;align-items:center;width:100%;max-width:720px;margin:16px auto;text-decoration:none;color:inherit;border:1px solid #e5e7eb;border-radius:10px;padding:10px;background:#fff;box-sizing:border-box;\">{$thumbTag}<div style=\"min-width:0;\"><div style=\"font-weight:600;font-size:14px;\">{$title}</div><div style=\"font-size:12px;color:#6b7280;\">{$body}</div></div></a>";
         } else {
-            $mediaStyle = 'max-width:100%;width:auto;height:auto;border:0;border-radius:6px;display:block;margin:0 auto;';
+            $mediaStyle = 'max-width:100%;width:auto;height:auto;max-height:70vh;object-fit:contain;border:0;border-radius:6px;display:block;margin:0 auto;';
             $mediaTag = $creative->media_type === 'video'
                 ? "<video src=\"{$mediaUrl}\" autoplay muted loop playsinline preload=\"metadata\" style=\"{$mediaStyle}\"></video>"
                 : "<img src=\"{$mediaUrl}\" alt=\"{$title}\" loading=\"lazy\" style=\"{$mediaStyle}\">";
 
-            $html = "<div class=\"cm-rec-wrap\" style=\"max-width:100%;margin:16px auto;text-align:center;box-sizing:border-box;\"><a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:inline-block;max-width:100%;\">{$mediaTag}</a></div>";
+            $html = "<div class=\"cm-rec-wrap\" style=\"width:100%;max-width:100%;margin:16px auto;text-align:center;box-sizing:border-box;\"><a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:inline-block;max-width:100%;\">{$mediaTag}</a></div>";
         }
 
         return [
