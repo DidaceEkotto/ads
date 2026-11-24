@@ -46,6 +46,11 @@ function confirmLogout() {
           </Link>
         </li>
         <li class="nav-item">
+          <Link href="/publisher/stats" class="nav-link pub-nav-link" :class="{ active: isActive('/publisher/stats') }">
+            <i class="bi bi-graph-up-arrow me-2"></i>Revenus &amp; Stats
+          </Link>
+        </li>
+        <li class="nav-item">
           <Link href="/publisher/sites" class="nav-link pub-nav-link" :class="{ active: isActive('/publisher/sites') }">
             <i class="bi bi-globe2 me-2"></i>Mes Sites
           </Link>
@@ -83,6 +88,7 @@ function confirmLogout() {
       <div class="offcanvas-body d-flex flex-column">
         <ul class="nav nav-pills flex-column gap-1 mb-auto">
           <li><Link href="/publisher/dashboard" class="nav-link pub-nav-link" :class="{ active: isActive('/publisher/dashboard') }"><i class="bi bi-speedometer2 me-2"></i>{{ t('dashboard') }}</Link></li>
+          <li><Link href="/publisher/stats" class="nav-link pub-nav-link" :class="{ active: isActive('/publisher/stats') }"><i class="bi bi-graph-up-arrow me-2"></i>Revenus &amp; Stats</Link></li>
           <li><Link href="/publisher/sites" class="nav-link pub-nav-link" :class="{ active: isActive('/publisher/sites') }"><i class="bi bi-globe2 me-2"></i>Mes Sites</Link></li>
           <li><Link href="/publisher/social" class="nav-link pub-nav-link" :class="{ active: isActive('/publisher/social') }"><i class="bi bi-share me-2"></i>Réseaux Sociaux</Link></li>
           <li><Link href="/publisher/payouts" class="nav-link pub-nav-link" :class="{ active: isActive('/publisher/payouts') }"><i class="bi bi-cash-stack me-2"></i>Retraits</Link></li>

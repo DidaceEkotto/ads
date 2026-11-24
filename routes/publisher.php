@@ -7,9 +7,11 @@ use App\Http\Controllers\Publisher\ProfileController;
 use App\Http\Controllers\Publisher\SiteController;
 use App\Http\Controllers\Publisher\SocialController;
 use App\Http\Controllers\Publisher\SocialOAuthController;
+use App\Http\Controllers\Publisher\StatsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/dashboard', DashboardController::class)->name('dashboard');
+Route::get('/stats', StatsController::class)->name('stats');
 
 Route::prefix('sites')->name('sites.')->group(function () {
     Route::get('/', [SiteController::class, 'index'])->name('index');
