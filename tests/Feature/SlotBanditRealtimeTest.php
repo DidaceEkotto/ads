@@ -202,10 +202,10 @@ class SlotBanditRealtimeTest extends TestCase
         preg_match('/"view_token":"([^"]+)"/', $content, $viewMatch);
         preg_match('/https?:\/\/[^\s"\'<>]+?\/click\/([A-Za-z0-9_\-=.%]+)/', $content, $clickMatch);
 
-        // 1re vue au scroll -> +3 FCFA
+        // 1re vue au scroll (via pixel GET /m/v cross-origin) -> +3 FCFA
         $this->withHeaders(['User-Agent' => 'Mozilla/5.0 (Linux; Android 13; Mobile)'])
-            ->post('/m/v', ['view_token' => $viewMatch[1]])
-            ->assertNoContent();
+            ->get('/m/v?view_token='.urlencode($viewMatch[1]))
+            ->assertOk();
         $this->assertSame(3, $pubWallet->fresh()->pending_balance_xaf);
 
         // 2e visite / retour sur la même page -> vue unique déjà comptée, 0 FCFA supplémentaire

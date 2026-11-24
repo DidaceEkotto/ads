@@ -32,7 +32,7 @@ Route::get('/c/{code}', [SocialRedirectController::class, 'redirect'])
 Route::post('/m/ab', [AdBlockMetricController::class, 'record'])
     ->name('adserving.adblock');
 
-Route::post('/m/v', [ViewTrackingController::class, 'record'])
+Route::match(['get', 'post'], '/m/v', [ViewTrackingController::class, 'record'])
     ->name('adserving.view');
 
 Route::get('/m/conv/{campaign}', [ConversionPixelController::class, 'track'])

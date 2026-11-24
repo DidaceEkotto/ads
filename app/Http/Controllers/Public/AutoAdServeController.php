@@ -185,15 +185,38 @@ class AutoAdServeController extends Controller
       box.style.cssText='position:static;display:block;clear:both;width:100%;margin:12px 0;';
       box.innerHTML=item.html;
       placeByHeuristic(box,item.slot_key||'below_navbar');
-      if('IntersectionObserver' in window && box.parentNode){
+      if(box.parentNode){
         var sent=false;
-        var obs=new IntersectionObserver(function(e){
-          if(!sent && e[0] && e[0].isIntersecting){
-            sent=true;obs.disconnect();
-            if(navigator.sendBeacon){navigator.sendBeacon(viewUrl,new URLSearchParams({view_token:item.view_token}));}
+        function sendView(){
+          if(sent)return;
+          sent=true;
+          var img=new Image();
+          img.src=viewUrl+(viewUrl.indexOf('?')===-1?'?':'&')+'view_token='+encodeURIComponent(item.view_token);
+        }
+        function isVisibleInViewport(){
+          var r=box.getBoundingClientRect();
+          return r.height>0 && r.width>0 && r.top<window.innerHeight && r.bottom>0;
+        }
+        if('IntersectionObserver' in window){
+          var obs=new IntersectionObserver(function(entries){
+            for(var k=0;k<entries.length;k++){
+              if(!sent && entries[k].isIntersecting){
+                obs.disconnect();
+                sendView();
+                break;
+              }
+            }
+          },{threshold:0.05});
+          obs.observe(box);
+        }
+        var onScrollCheck=function(){
+          if(!sent && isVisibleInViewport()){
+            window.removeEventListener('scroll',onScrollCheck);
+            sendView();
           }
-        },{threshold:0.5});
-        obs.observe(box);
+        };
+        window.addEventListener('scroll',onScrollCheck,{passive:true});
+        setTimeout(onScrollCheck,500);
       }
     });
   }

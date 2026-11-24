@@ -23,44 +23,59 @@ use Throwable;
 class ViewTrackingController extends Controller
 {
     /**
-     * Enregistre et facture une vue visible au scroll (IntersectionObserver >= 50%).
+     * Enregistre et facture une vue visible au scroll (IntersectionObserver / scroll).
      */
     public function record(Request $request, LedgerService $ledger): Response
     {
+        $okResponse = fn () => $request->isMethod('GET')
+            ? response(base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), 200, [
+                'Content-Type' => 'image/gif',
+                'Cache-Control' => 'no-store, no-cache, must-revalidate',
+                'Access-Control-Allow-Origin' => '*',
+            ])
+            : response()->noContent(204, ['Access-Control-Allow-Origin' => '*']);
+
         $token = (string) $request->input('view_token', '');
         if ($token === '' || BotUserAgentList::isGenericBot($request->userAgent())) {
-            return response()->noContent();
+            return $okResponse();
         }
 
         try {
             $payload = json_decode(Crypt::decryptString($token), true, 512, JSON_THROW_ON_ERROR);
         } catch (Throwable) {
-            return response()->noContent();
+            return $okResponse();
         }
 
         $campaignId = (int) ($payload['campaign_id'] ?? 0);
         $publisherId = (int) ($payload['publisher_id'] ?? 0);
+        $siteId = (int) ($payload['site_id'] ?? 0);
         $visitorHash = hash('sha256', ($request->ip() ?? '').'|'.($request->userAgent() ?? ''));
 
         // Remontée temps réel de la visibilité réelle (viewability) pour Thompson Sampling
-        if (! empty($payload['site_id']) && ! empty($payload['slot_key'])) {
-            $slotDedupKey = "slot_view_dedup:{$payload['site_id']}:{$payload['slot_key']}:{$visitorHash}";
+        if ($siteId > 0 && ! empty($payload['slot_key'])) {
+            $slotDedupKey = "slot_view_dedup:{$siteId}:{$payload['slot_key']}:{$visitorHash}";
             if (Cache::add($slotDedupKey, 1, now()->addMinutes(10))) {
                 AdSlotMetric::recordViewable(
-                    (int) $payload['site_id'],
+                    $siteId,
                     (string) $payload['slot_key'],
                     (string) ($payload['device_type'] ?? 'desktop')
                 );
             }
         }
 
-        // Déduplication permanente (vue unique par visiteur + publicité + site/page)
-        $siteId = (int) ($payload['site_id'] ?? 0);
-        $dedupKey = "view_unique:{$campaignId}:{$siteId}:{$visitorHash}";
-        if (! Cache::add($dedupKey, 1, now()->addDays(30))) {
-            return response()->noContent();
+        $campaign = Campaign::query()->with('advertiser.wallet')->find($campaignId);
+        $publisher = User::query()->with(['wallet', 'publisherProfile'])->find($publisherId);
+
+        if (! $campaign || ! $publisher || ! in_array($campaign->billing_model, [BillingModel::Cpc, BillingModel::Cpm], true)) {
+            return $okResponse();
         }
 
+        $viewCostXaf = (int) Setting::getValue('view_unit_price_xaf', 3);
+        if ($viewCostXaf <= 0) {
+            return $okResponse();
+        }
+
+        // Déduplication permanente (vue unique par visiteur + publicité + site/page)
         $alreadyPaidInDb = Impression::query()
             ->where('campaign_id', $campaignId)
             ->where('visitor_hash', $visitorHash)
@@ -69,19 +84,12 @@ class ViewTrackingController extends Controller
             ->exists();
 
         if ($alreadyPaidInDb) {
-            return response()->noContent();
+            return $okResponse();
         }
 
-        $campaign = Campaign::query()->with('advertiser.wallet')->find($campaignId);
-        $publisher = User::query()->with(['wallet', 'publisherProfile'])->find($publisherId);
-
-        if (! $campaign || ! $publisher || ! in_array($campaign->billing_model, [BillingModel::Cpc, BillingModel::Cpm], true)) {
-            return response()->noContent();
-        }
-
-        $viewCostXaf = (int) Setting::getValue('view_unit_price_xaf', 3);
-        if ($viewCostXaf <= 0) {
-            return response()->noContent();
+        $dedupKey = "view_unique:{$campaignId}:{$siteId}:{$visitorHash}";
+        if (! Cache::add($dedupKey, 1, now()->addDays(30))) {
+            return $okResponse();
         }
 
         $sharePercent = $publisher->publisherProfile?->custom_share_percent
@@ -184,6 +192,6 @@ class ViewTrackingController extends Controller
             }
         });
 
-        return response()->noContent();
+        return $okResponse();
     }
 }
