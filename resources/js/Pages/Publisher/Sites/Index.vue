@@ -72,16 +72,7 @@ function submit() {
                   <option value="en">English</option>
                 </select>
               </div>
-              <div class="mb-3">
-                <label class="form-label small fw-semibold">Types de publicités automatiques</label>
-                <div class="d-flex flex-column gap-1">
-                  <label v-for="f in formats" :key="f.value" class="form-check small">
-                    <input v-model="form.allowed_formats" :value="f.value" type="checkbox" class="form-check-input" />
-                    <span class="form-check-label">{{ f.label }}</span>
-                  </label>
-                </div>
-              </div>
-              <button type="submit" class="btn btn-coral w-100 fw-semibold" :disabled="form.processing || !form.allowed_formats.length">
+              <button type="submit" class="btn btn-coral w-100 fw-semibold" :disabled="form.processing">
                 Soumettre le site
               </button>
             </form>
@@ -145,3 +136,22 @@ function submit() {
     </div>
   </PublisherLayout>
 </template>
+
+<style scoped>
+.btn-coral {
+  background-color: #ff5c35;
+  border-color: #ff5c35;
+  color: #fff;
+}
+.btn-coral:hover:not(:disabled) {
+  background-color: #e64922;
+  border-color: #e64922;
+  color: #fff;
+}
+.btn-coral:disabled {
+  background-color: #ff5c35;
+  border-color: #ff5c35;
+  opacity: 0.65;
+  color: #fff;
+}
+</style>

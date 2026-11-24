@@ -1,6 +1,6 @@
 <script setup>
 import { Link, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import PublisherLayout from '../../../Layouts/PublisherLayout.vue';
 
 const props = defineProps({
@@ -13,13 +13,20 @@ const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
 const copiedId = ref(null);
 
+const selectedFormat = ref(props.site.allowed_formats?.[0] || 'native');
+
 const autoAdsForm = useForm({
   auto_ads_enabled: props.site.auto_ads_enabled,
-  allowed_formats: [...(props.site.allowed_formats || [])],
+  allowed_formats: [selectedFormat.value],
   custom_cdn_host: props.site.custom_cdn_host || '',
 });
 
+watch(selectedFormat, (val) => {
+  autoAdsForm.allowed_formats = [val];
+});
+
 function saveAutoAds() {
+  autoAdsForm.allowed_formats = [selectedFormat.value];
   autoAdsForm.patch(`/publisher/sites/${props.site.id}/auto-ads`, {
     preserveScroll: true,
   });
@@ -93,19 +100,20 @@ const formatMeta = {
 
         <form @submit.prevent="saveAutoAds">
           <div class="mb-3">
-            <label class="form-label small fw-semibold mb-2">Types de publicités autorisées sur votre site *</label>
+            <label class="form-label small fw-semibold mb-2">Types de publicités autorisées sur votre site * (1 seul format actif)</label>
             <div class="row g-2">
               <div v-for="f in formats" :key="f.value" class="col-6 col-md-3">
                 <label
                   class="format-visual-card border rounded-3 p-2 h-100 d-flex flex-column cursor-pointer"
-                  :class="autoAdsForm.allowed_formats.includes(f.value) ? 'border-coral bg-coral-subtle' : 'bg-white'"
+                  :class="selectedFormat === f.value ? 'border-coral bg-coral-subtle' : 'bg-white'"
                 >
                   <div class="d-flex justify-content-between align-items-center mb-1">
                     <span class="fw-semibold text-slate" style="font-size: 0.75rem;">{{ formatMeta[f.value]?.title || f.label }}</span>
                     <input
-                      v-model="autoAdsForm.allowed_formats"
+                      v-model="selectedFormat"
                       :value="f.value"
-                      type="checkbox"
+                      name="allowed_format"
+                      type="radio"
                       class="form-check-input m-0 coral-check"
                     />
                   </div>
