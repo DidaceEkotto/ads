@@ -4,6 +4,8 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Demo\DemoController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\Webhooks\PaymentWebhookController;
+use App\Models\Setting;
+use App\Services\Automation\DynamicCronService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -63,3 +65,16 @@ Route::get('/create-symlink', function () {
         return 'Erreur : ' . $e->getMessage();
     }
 });
+
+// Endpoint optionnel pour déclencher le cron dynamique via URL externe (ex: cron-job.org)
+Route::get('/cron/run', function (Request $request, DynamicCronService $cron) {
+    $expected = (string) Setting::getValue('cron_secret_token', '');
+    if ($expected !== '' && ! hash_equals($expected, (string) $request->query('token', ''))) {
+        abort(403);
+    }
+
+    return response()->json([
+        'status' => 'ok',
+        'executed' => $cron->runDueTasks(force: true),
+    ]);
+})->name('cron.run');

@@ -4,6 +4,7 @@ use App\Http\Middleware\CheckMaintenanceMode;
 use App\Http\Middleware\EnsureDemoMode;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\RunDynamicCron;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -44,6 +45,7 @@ return Application::configure(basePath: dirname(__DIR__))
             SetLocale::class,
             CheckMaintenanceMode::class,
             HandleInertiaRequests::class,
+            RunDynamicCron::class,
         ]);
 
         $middleware->alias([
