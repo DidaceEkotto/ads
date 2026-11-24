@@ -12,7 +12,7 @@ use InvalidArgumentException;
  */
 class CreativeUploadService
 {
-    public const MAX_IMAGE_BYTES = 153600; // 150 Ko
+    public const MAX_IMAGE_BYTES = 512000; // 500 Ko
 
     public const MAX_GIF_BYTES = 512000;   // 500 Ko
 

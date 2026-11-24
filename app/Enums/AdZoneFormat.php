@@ -11,6 +11,7 @@ enum AdZoneFormat: string
     case Square300x250 = 'square_300x250';
     case Vertical160x600 = 'vertical_160x600';
     case Native = 'native';
+    case Modal = 'modal';
 
     public function label(): string
     {
@@ -19,6 +20,7 @@ enum AdZoneFormat: string
             self::Square300x250 => __('Carré (300x250)'),
             self::Vertical160x600 => __('Vertical (160x600)'),
             self::Native => __('Format natif recommandé'),
+            self::Modal => __('Popup / Modal (1h)'),
         };
     }
 
@@ -34,6 +36,7 @@ enum AdZoneFormat: string
             self::Square300x250 => ['width' => 300, 'height' => 250],
             self::Vertical160x600 => ['width' => 160, 'height' => 600],
             self::Native => ['width' => null, 'height' => null],
+            self::Modal => ['width' => 500, 'height' => 400],
         };
     }
 }

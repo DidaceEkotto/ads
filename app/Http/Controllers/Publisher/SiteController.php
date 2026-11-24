@@ -54,8 +54,8 @@ class SiteController extends Controller
         $request->user()->sites()->create([
             'name' => $request->validated('name'),
             'domain' => $request->validated('domain'),
-            'category' => $request->validated('category'),
-            'language' => $request->validated('language'),
+            'category' => $request->validated('category') ?: 'general',
+            'language' => $request->validated('language') ?: 'fr',
             'status' => SiteStatus::Pending,
             'verification_token' => Str::random(40),
             'site_token' => Str::lower(Str::random(20)),

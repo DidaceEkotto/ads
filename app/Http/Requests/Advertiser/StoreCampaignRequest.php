@@ -27,7 +27,7 @@ class StoreCampaignRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:150'],
-            'type' => ['required', Rule::enum(CampaignType::class)],
+            'type' => ['required', Rule::in([CampaignType::Web->value])],
             'billing_model' => ['required', Rule::enum(BillingModel::class)],
             'duration_days' => ['required', 'integer', 'min:1', 'max:365'],
             'starts_at' => ['nullable', 'date'],

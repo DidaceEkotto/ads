@@ -15,6 +15,7 @@ use App\Models\Conversion;
 use App\Models\Impression;
 use App\Models\Setting;
 use App\Models\Site;
+use App\Services\Billing\LedgerService;
 use App\Services\Media\CreativeUploadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,11 +68,12 @@ class CampaignController extends Controller
         $wallet = $request->user()->wallet()->firstOrCreate(['user_id' => $request->user()->id]);
 
         return Inertia::render('Advertiser/Campaigns/Create', [
-            'types' => collect(CampaignType::cases())->map(fn ($t) => ['value' => $t->value, 'label' => $t->label()]),
+            'types' => [
+                ['value' => CampaignType::Web->value, 'label' => CampaignType::Web->label()],
+            ],
             'billingModels' => collect(BillingModel::cases())->map(fn ($b) => ['value' => $b->value, 'label' => $b->label()]),
             'formats' => collect(AdZoneFormat::cases())->map(fn ($f) => ['value' => $f->value, 'label' => $f->label()]),
-            'cameroonCities' => ['Douala', 'Yaoundé', 'Bafoussam', 'Garoua', 'Bamenda', 'Maroua', 'Ngaoundéré', 'Kribi', 'Limbé', 'Buea'],
-            'categories' => ['actualites', 'sport', 'tech', 'divertissement', 'business', 'education', 'lifestyle'],
+            'geoRegions' => self::geoRegions(),
             'walletBalanceXaf' => (int) $wallet->available_balance_xaf,
             'pricing' => [
                 'daily_campaign_cost_xaf' => (int) Setting::getValue('daily_campaign_cost_xaf', 2000),
@@ -81,7 +83,7 @@ class CampaignController extends Controller
         ]);
     }
 
-    public function store(StoreCampaignRequest $request, CreativeUploadService $uploader): RedirectResponse
+    public function store(StoreCampaignRequest $request, CreativeUploadService $uploader, LedgerService $ledger): RedirectResponse
     {
         try {
             $media = $uploader->store($request->file('media'));
@@ -130,7 +132,7 @@ class CampaignController extends Controller
         // Soumission pour validation obligatoire et non négociable
         $status = CampaignStatus::PendingReview;
 
-        DB::transaction(function () use ($request, $media, $mediaB, $status, $totalBudget, $dailyCost, $unitPrice, $startsAt, $endsAt): void {
+        DB::transaction(function () use ($request, $wallet, $ledger, $media, $mediaB, $status, $totalBudget, $dailyCost, $unitPrice, $startsAt, $endsAt): void {
             /** @var Campaign $campaign */
             $campaign = Campaign::query()->create([
                 'advertiser_id' => $request->user()->id,
@@ -144,6 +146,16 @@ class CampaignController extends Controller
                 'starts_at' => $startsAt,
                 'ends_at' => $endsAt,
             ]);
+
+            // Débit immédiat du wallet en temps réel dès le lancement de la campagne
+            if ($totalBudget > 0) {
+                $ledger->debitForAdSpend(
+                    $wallet,
+                    $totalBudget,
+                    $campaign,
+                    __('Budget réservé pour la campagne :name', ['name' => $campaign->name])
+                );
+            }
 
             $campaign->creatives()->create([
                 'title' => $request->validated('title'),
@@ -170,8 +182,8 @@ class CampaignController extends Controller
             $campaign->targeting()->create([
                 'cities' => $request->validated('cities') ?? [],
                 'languages' => $request->validated('languages') ?? [],
-                'devices' => $request->validated('devices') ?? [],
-                'categories' => $request->validated('categories') ?? [],
+                'devices' => [],
+                'categories' => [],
             ]);
         });
 
@@ -211,14 +223,11 @@ class CampaignController extends Controller
                 'format' => $creative?->format ?? 'square_300x250',
                 'media_url' => $creative?->mediaUrl(),
                 'media_type' => $creative?->media_type,
-                'cities' => $targeting?->cities ?? ['Douala'],
+                'cities' => $targeting?->cities ?? ['Cameroun'],
                 'languages' => $targeting?->languages ?? ['fr'],
-                'devices' => $targeting?->devices ?? ['mobile', 'desktop'],
-                'categories' => $targeting?->categories ?? ['actualites'],
             ],
             'formats' => collect(AdZoneFormat::cases())->map(fn ($f) => ['value' => $f->value, 'label' => $f->label()]),
-            'cameroonCities' => ['Douala', 'Yaoundé', 'Bafoussam', 'Garoua', 'Bamenda', 'Maroua', 'Ngaoundéré', 'Kribi', 'Limbé', 'Buea'],
-            'categories' => ['actualites', 'sport', 'tech', 'divertissement', 'business', 'education', 'lifestyle'],
+            'geoRegions' => self::geoRegions(),
             'walletBalanceXaf' => (int) $wallet->available_balance_xaf,
             'pricing' => [
                 'daily_campaign_cost_xaf' => (int) Setting::getValue('daily_campaign_cost_xaf', 2000),
@@ -228,7 +237,7 @@ class CampaignController extends Controller
         ]);
     }
 
-    public function update(UpdateCampaignRequest $request, Campaign $campaign, CreativeUploadService $uploader): RedirectResponse
+    public function update(UpdateCampaignRequest $request, Campaign $campaign, CreativeUploadService $uploader, LedgerService $ledger): RedirectResponse
     {
         Gate::authorize('update', $campaign);
 
@@ -244,16 +253,17 @@ class CampaignController extends Controller
         $dailyCost = (int) Setting::getValue('daily_campaign_cost_xaf', 2000);
         $durationDays = (int) $request->validated('duration_days');
         $totalBudget = $durationDays * $dailyCost;
+        $additionalBudget = max(0, $totalBudget - (int) $campaign->total_budget_xaf);
 
         $wallet = $request->user()->wallet()->firstOrCreate(['user_id' => $request->user()->id]);
-        if ((int) $wallet->available_balance_xaf < $totalBudget) {
+        if ($additionalBudget > 0 && (int) $wallet->available_balance_xaf < $additionalBudget) {
             return back()
                 ->withErrors([
                     'wallet' => 'Solde insuffisant dans votre portefeuille ('
                         .number_format((int) $wallet->available_balance_xaf, 0, ',', ' ')
                         .' FCFA disponibles sur '
-                        .number_format($totalBudget, 0, ',', ' ')
-                        .' FCFA requis). Veuillez recharger votre wallet.',
+                        .number_format($additionalBudget, 0, ',', ' ')
+                        .' FCFA supplémentaires requis). Veuillez recharger votre wallet.',
                 ])
                 ->withInput();
         }
@@ -273,7 +283,7 @@ class CampaignController extends Controller
             $newStatus = CampaignStatus::PendingReview;
         }
 
-        DB::transaction(function () use ($request, $campaign, $creative, $media, $totalBudget, $dailyCost, $startsAt, $endsAt, $newStatus): void {
+        DB::transaction(function () use ($request, $wallet, $ledger, $additionalBudget, $campaign, $creative, $media, $totalBudget, $dailyCost, $startsAt, $endsAt, $newStatus): void {
             $campaign->update([
                 'name' => $request->validated('name'),
                 'total_budget_xaf' => $totalBudget,
@@ -283,6 +293,15 @@ class CampaignController extends Controller
                 'status' => $newStatus,
                 'rejection_reason' => $newStatus === CampaignStatus::PendingReview ? null : $campaign->rejection_reason,
             ]);
+
+            if ($additionalBudget > 0) {
+                $ledger->debitForAdSpend(
+                    $wallet,
+                    $additionalBudget,
+                    $campaign,
+                    __('Extension de budget pour la campagne :name', ['name' => $campaign->name])
+                );
+            }
 
             if ($creative) {
                 $creativeData = [
@@ -304,8 +323,8 @@ class CampaignController extends Controller
                 [
                     'cities' => $request->validated('cities') ?? [],
                     'languages' => $request->validated('languages') ?? [],
-                    'devices' => $request->validated('devices') ?? [],
-                    'categories' => $request->validated('categories') ?? [],
+                    'devices' => [],
+                    'categories' => [],
                 ]
             );
         });
@@ -519,5 +538,28 @@ class CampaignController extends Controller
         ]);
 
         return back()->with('success', __('Campagne soumise pour validation par l\'administrateur.'));
+    }
+
+    /**
+     * Liste des zones géographiques (Afrique subsaharienne, Maghreb, autres continents).
+     *
+     * @return array{subsaharan: array<int, string>, maghreb: array<int, string>, continents: array<int, string>}
+     */
+    private static function geoRegions(): array
+    {
+        return [
+            'subsaharan' => [
+                'Cameroun', 'Côte d\'Ivoire', 'Sénégal', 'Gabon', 'Congo', 'RD Congo',
+                'Bénin', 'Togo', 'Burkina Faso', 'Mali', 'Niger', 'Guinée', 'Tchad',
+                'Centrafrique', 'Guinée équatoriale', 'Nigeria', 'Ghana', 'Kenya',
+                'Rwanda', 'Madagascar', 'Afrique du Sud',
+            ],
+            'maghreb' => [
+                'Maroc', 'Algérie', 'Tunisie', 'Libye', 'Mauritanie',
+            ],
+            'continents' => [
+                'Europe', 'Amérique du Nord', 'Amérique du Sud', 'Asie', 'Océanie',
+            ],
+        ];
     }
 }

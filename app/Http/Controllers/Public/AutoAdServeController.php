@@ -205,9 +205,44 @@ class AutoAdServeController extends Controller
     if(media.complete||media.readyState>=1){adjust();}
     else{media.addEventListener('load',adjust,{once:true});media.addEventListener('loadedmetadata',adjust,{once:true});}
   }
+  function mountModal(item){
+    try{
+      var key='cm_modal_seen_'+(item.campaign_id||'0');
+      var last=parseInt(localStorage.getItem(key)||'0',10);
+      if(last && (Date.now()-last)<3600000){return;}
+      localStorage.setItem(key,String(Date.now()));
+    }catch(e){}
+    if(document.querySelector('.cm-auto-modal'))return;
+    var overlay=document.createElement('div');
+    overlay.className='cm-auto-modal';
+    overlay.style.cssText='position:fixed;inset:0;z-index:999999;background:rgba(15,23,42,0.65);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+    var dialog=document.createElement('div');
+    dialog.style.cssText='position:relative;background:#fff;border-radius:14px;padding:14px;max-width:540px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,0.35);text-align:center;';
+    var closeBtn=document.createElement('button');
+    closeBtn.type='button';
+    closeBtn.innerHTML='&times;';
+    closeBtn.setAttribute('aria-label','Fermer');
+    closeBtn.style.cssText='position:absolute;top:8px;right:10px;border:0;background:#f1f5f9;color:#1e293b;width:30px;height:30px;border-radius:999px;font-size:20px;line-height:1;cursor:pointer;';
+    closeBtn.onclick=function(){overlay.remove();};
+    overlay.onclick=function(ev){if(ev.target===overlay){overlay.remove();}};
+    var content=document.createElement('div');
+    content.innerHTML=item.html;
+    dialog.appendChild(closeBtn);
+    dialog.appendChild(content);
+    overlay.appendChild(dialog);
+    if(document.body){
+      document.body.appendChild(overlay);
+      var img=new Image();
+      img.src=viewUrl+(viewUrl.indexOf('?')===-1?'?':'&')+'view_token='+encodeURIComponent(item.view_token);
+    }
+  }
   function mount(){
     if(document.querySelector('.cm-auto-slot'))return;
     items.forEach(function(item){
+      if(item.format==='modal'){
+        mountModal(item);
+        return;
+      }
       var box=document.createElement('div');
       box.className='cm-auto-slot';
       box.setAttribute('data-cm-slot',item.slot_key||'auto');
@@ -346,6 +381,7 @@ JS;
         }
 
         return [
+            'campaign_id' => $creative->campaign_id,
             'format' => $format,
             'slot_key' => $slotKey,
             'html' => $html,

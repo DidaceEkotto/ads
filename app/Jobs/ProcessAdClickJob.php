@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Enums\BillingModel;
 use App\Enums\CampaignStatus;
+use App\Enums\TransactionType;
 use App\Events\CampaignBudgetLow;
 use App\Models\AdSlotMetric;
 use App\Models\Campaign;
@@ -11,6 +12,7 @@ use App\Models\Click;
 use App\Models\FraudFlag;
 use App\Models\Setting;
 use App\Models\StatsDaily;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AntiFraud\ClickFraudDetector;
 use App\Services\Billing\LedgerService;
@@ -170,8 +172,16 @@ class ProcessAdClickJob implements ShouldQueue
             ]);
 
             if ($costXaf > 0) {
-                $advWallet = $lockedCampaign->advertiser->wallet()->firstOrCreate(['user_id' => $lockedCampaign->advertiser_id]);
-                $ledger->debitForAdSpend($advWallet, $costXaf, $click, __('Clic valide sur :name', ['name' => $lockedCampaign->name]));
+                $isPrepaid = Transaction::query()
+                    ->where('reference_type', Campaign::class)
+                    ->where('reference_id', $lockedCampaign->id)
+                    ->where('type', TransactionType::AdSpend)
+                    ->exists();
+
+                if (! $isPrepaid) {
+                    $advWallet = $lockedCampaign->advertiser->wallet()->firstOrCreate(['user_id' => $lockedCampaign->advertiser_id]);
+                    $ledger->debitForAdSpend($advWallet, $costXaf, $click, __('Clic valide sur :name', ['name' => $lockedCampaign->name]));
+                }
 
                 $newSpent = $lockedCampaign->spent_xaf + $costXaf;
                 $updates = ['spent_xaf' => $newSpent];

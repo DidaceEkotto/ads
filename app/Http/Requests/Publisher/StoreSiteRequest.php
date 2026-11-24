@@ -38,8 +38,8 @@ class StoreSiteRequest extends FormRequest
                 'regex:/^[a-z0-9.-]+\.[a-z]{2,}$/',
                 'unique:sites,domain',
             ],
-            'category' => ['required', 'string', 'max:50'],
-            'language' => ['required', Rule::in(['fr', 'en'])],
+            'category' => ['nullable', 'string', 'max:50'],
+            'language' => ['nullable', Rule::in(['fr', 'en'])],
             'allowed_formats' => ['nullable', 'array', 'min:1'],
             'allowed_formats.*' => [Rule::enum(AdZoneFormat::class)],
         ];

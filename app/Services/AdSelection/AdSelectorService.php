@@ -4,10 +4,12 @@ namespace App\Services\AdSelection;
 
 use App\Enums\CampaignStatus;
 use App\Enums\CampaignType;
+use App\Enums\TransactionType;
 use App\Models\AdZone;
 use App\Models\Campaign;
 use App\Models\Creative;
 use App\Models\Site;
+use App\Models\Transaction;
 use Illuminate\Support\Collection;
 
 /**
@@ -65,9 +67,21 @@ class AdSelectorService
                 return false;
             }
 
-            $wallet = $campaign->advertiser?->wallet;
-            if (! $wallet || $wallet->available_balance_xaf < $campaign->unit_price_xaf) {
-                return false;
+            $isPrepaid = Transaction::query()
+                ->where('reference_type', Campaign::class)
+                ->where('reference_id', $campaign->id)
+                ->where('type', TransactionType::AdSpend)
+                ->exists();
+
+            if ($isPrepaid) {
+                if ($campaign->remainingBudgetXaf() < $campaign->unit_price_xaf) {
+                    return false;
+                }
+            } else {
+                $wallet = $campaign->advertiser?->wallet;
+                if (! $wallet || $wallet->available_balance_xaf < $campaign->unit_price_xaf) {
+                    return false;
+                }
             }
 
             $targeting = $campaign->targeting;

@@ -15,9 +15,6 @@ const flashSuccess = computed(() => page.props.flash?.success);
 const form = useForm({
   name: '',
   domain: '',
-  category: 'actualites',
-  language: 'fr',
-  allowed_formats: ['native', 'square_300x250'],
 });
 
 function submit() {
@@ -58,19 +55,6 @@ function submit() {
                   required
                 />
                 <div v-if="form.errors.domain" class="invalid-feedback">{{ form.errors.domain }}</div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Catégorie</label>
-                <select v-model="form.category" class="form-select">
-                  <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Langue principale</label>
-                <select v-model="form.language" class="form-select">
-                  <option value="fr">Français</option>
-                  <option value="en">English</option>
-                </select>
               </div>
               <button type="submit" class="btn btn-coral w-100 fw-semibold" :disabled="form.processing">
                 Soumettre le site

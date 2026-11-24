@@ -213,4 +213,61 @@ class AutoAdsTest extends TestCase
         $this->assertStringContainsString('Pub Alpha', $content);
         $this->assertStringContainsString('Pub Beta', $content);
     }
+
+    public function test_modal_ad_format_includes_1h_cooldown(): void
+    {
+        $adv = User::query()->create([
+            'name' => 'Adv Modal',
+            'email' => 'advmodal@cm.cm',
+            'phone' => '+237677111888',
+            'role' => UserRole::Advertiser,
+            'password' => 'Secret1234',
+        ]);
+        $adv->wallet()->create(['available_balance_xaf' => 50000]);
+
+        $pub = User::query()->create([
+            'name' => 'Pub Modal',
+            'email' => 'pubmodal@cm.cm',
+            'phone' => '+237699222888',
+            'role' => UserRole::Publisher,
+            'password' => 'Secret1234',
+        ]);
+
+        $site = Site::query()->create([
+            'publisher_id' => $pub->id,
+            'name' => 'Site Modal',
+            'domain' => 'modal.cm',
+            'category' => 'general',
+            'language' => 'fr',
+            'status' => SiteStatus::Approved,
+            'site_token' => 'modaltoken123456',
+            'auto_ads_enabled' => true,
+            'allowed_formats' => [AdZoneFormat::Modal->value],
+        ]);
+
+        $c = Campaign::query()->create([
+            'advertiser_id' => $adv->id,
+            'name' => 'Campagne Modal',
+            'type' => CampaignType::Web,
+            'billing_model' => BillingModel::Cpc,
+            'status' => CampaignStatus::Active,
+            'total_budget_xaf' => 20000,
+            'daily_budget_xaf' => 2000,
+            'unit_price_xaf' => 50,
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addDays(5),
+        ]);
+        $c->creatives()->create([
+            'title' => 'Popup Promo',
+            'destination_url' => 'https://client.cm',
+            'media_type' => 'image',
+            'media_path' => 'creatives/modal.png',
+            'format' => AdZoneFormat::Modal->value,
+            'file_size_bytes' => 1024,
+        ]);
+
+        $res = $this->get("/a/{$site->site_token}.js")->assertOk();
+        $this->assertStringContainsString('cm-auto-modal', $res->getContent());
+        $this->assertStringContainsString('3600000', $res->getContent());
+    }
 }

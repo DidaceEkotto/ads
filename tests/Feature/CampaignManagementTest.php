@@ -36,17 +36,17 @@ class CampaignManagementTest extends TestCase
         ]);
         $advertiser->wallet()->updateOrCreate(
             ['user_id' => $advertiser->id],
-            ['available_balance_xaf' => 15000]
+            ['available_balance_xaf' => 20000]
         );
 
-        // Image PNG 10 Ko (< 150 Ko)
+        // Image PNG 10 Ko (< 500 Ko)
         $image = UploadedFile::fake()->image('promo.png', 300, 250)->size(10);
 
         $this->actingAs($advertiser)->get('/advertiser/campaigns/create')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Advertiser/Campaigns/Create')
-                ->where('walletBalanceXaf', 15000)
+                ->where('walletBalanceXaf', 20000)
             );
 
         $response = $this->actingAs($advertiser)->post('/advertiser/campaigns', [
@@ -74,6 +74,7 @@ class CampaignManagementTest extends TestCase
         $this->assertSame(50, $campaign->unit_price_xaf);
         $this->assertCount(1, $campaign->creatives);
         $this->assertSame(['Douala', 'Yaoundé'], $campaign->targeting->cities);
+        $this->assertSame(10000, $advertiser->wallet->fresh()->available_balance_xaf);
         Storage::disk('public')->assertExists($campaign->creatives->first()->media_path);
     }
 
@@ -87,8 +88,8 @@ class CampaignManagementTest extends TestCase
             'password' => 'Secret1234',
         ]);
 
-        // Image PNG de 200 Ko (> 150 Ko)
-        $heavyImage = UploadedFile::fake()->image('heavy.png', 300, 250)->size(200);
+        // Image PNG de 600 Ko (> 500 Ko)
+        $heavyImage = UploadedFile::fake()->image('heavy.png', 300, 250)->size(600);
 
         $this->actingAs($advertiser)->post('/advertiser/campaigns', [
             'name' => 'Trop lourd',

@@ -8,8 +8,7 @@ const props = defineProps({
   types: { type: Array, required: true },
   billingModels: { type: Array, required: true },
   formats: { type: Array, required: true },
-  cameroonCities: { type: Array, required: true },
-  categories: { type: Array, required: true },
+  geoRegions: { type: Object, required: true },
   walletBalanceXaf: { type: Number, default: 0 },
   pricing: { type: Object, required: true },
 });
@@ -27,10 +26,10 @@ const form = useForm({
   media: null,
   title_b: '',
   media_b: null,
-  cities: ['Douala', 'Yaoundé'],
+  cities: ['Cameroun'],
   languages: ['fr'],
-  devices: ['mobile', 'desktop'],
-  categories: ['actualites'],
+  devices: [],
+  categories: [],
 });
 
 const estimatedTotalXaf = computed(() =>
@@ -50,9 +49,29 @@ function formatXaf(amount) {
   return new Intl.NumberFormat('fr-FR').format(amount ?? 0) + ' FCFA';
 }
 
+const allGeoTargets = computed(() => [
+  ...(props.geoRegions?.subsaharan || []),
+  ...(props.geoRegions?.maghreb || []),
+  ...(props.geoRegions?.continents || []),
+]);
+
 const allCitiesSelected = computed(() =>
-  props.cameroonCities.length > 0 && form.cities.length === props.cameroonCities.length
+  allGeoTargets.value.length > 0 && allGeoTargets.value.every((g) => form.cities.includes(g))
 );
+
+function toggleGroup(list) {
+  const allIn = list.every((item) => form.cities.includes(item));
+  if (allIn) {
+    form.cities = form.cities.filter((c) => !list.includes(c));
+  } else {
+    const merged = new Set([...form.cities, ...list]);
+    form.cities = Array.from(merged);
+  }
+}
+
+function isGroupSelected(list) {
+  return list.length > 0 && list.every((item) => form.cities.includes(item));
+}
 
 const mediaPreviewUrl = ref(null);
 watch(
@@ -80,7 +99,7 @@ function toggleAllCities() {
   if (allCitiesSelected.value) {
     form.cities = [];
   } else {
-    form.cities = [...props.cameroonCities];
+    form.cities = [...allGeoTargets.value];
   }
 }
 
@@ -261,7 +280,7 @@ function submit() {
                   v-model="form.media"
                   accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
                   label="Glissez-déposez votre image, GIF ou vidéo courte, ou cliquez"
-                  hint="Formats : JPG/PNG/WebP (< 150 Ko), GIF (< 500 Ko), MP4/WebM (< 1 Mo)"
+                  hint="Formats : JPG/PNG/WebP/GIF (< 500 Ko), MP4/WebM (< 1 Mo)"
                   :error="form.errors.media"
                 />
               </div>
@@ -386,60 +405,89 @@ function submit() {
               <i class="bi bi-geo-alt-fill me-1"></i>3. Ciblage géographique &amp; Audience
             </h2>
 
-            <!-- Villes obligatoires avec bouton Tout sélectionner -->
+            <!-- Pays & Continents -->
             <div class="mb-4">
               <div class="d-flex justify-content-between align-items-center mb-2">
                 <label class="form-label small fw-semibold mb-0">
-                  Villes cibles (Cameroun) *
+                  Pays &amp; Continents cibles *
                 </label>
                 <button
                   type="button"
                   class="btn btn-link btn-sm p-0 text-coral fw-semibold text-decoration-none"
                   @click="toggleAllCities"
                 >
-                  {{ allCitiesSelected ? 'Tout désélectionner' : 'Toutes les villes' }}
+                  {{ allCitiesSelected ? 'Tout désélectionner' : 'Tout le monde' }}
                 </button>
               </div>
 
-              <div class="d-flex flex-wrap gap-2 p-3 rounded-3 bg-light border" :class="{ 'border-danger': form.errors.cities }">
-                <label
-                  v-for="city in cameroonCities"
-                  :key="city"
-                  class="city-chip"
-                  :class="{ 'is-selected': form.cities.includes(city) }"
-                >
-                  <input v-model="form.cities" :value="city" type="checkbox" class="d-none" />
-                  <i class="bi me-1" :class="form.cities.includes(city) ? 'bi-check-circle-fill' : 'bi-circle'"></i>
-                  {{ city }}
-                </label>
+              <!-- Afrique subsaharienne -->
+              <div class="p-3 rounded-3 bg-light border mb-2" :class="{ 'border-danger': form.errors.cities }">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="small fw-bold text-slate">Afrique subsaharienne (Afrique noire)</span>
+                  <button type="button" class="btn btn-link btn-sm p-0 text-coral text-decoration-none" @click="toggleGroup(geoRegions.subsaharan || [])">
+                    {{ isGroupSelected(geoRegions.subsaharan || []) ? 'Décocher' : 'Tout sélectionner' }}
+                  </button>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                  <label
+                    v-for="country in geoRegions.subsaharan || []"
+                    :key="country"
+                    class="city-chip"
+                    :class="{ 'is-selected': form.cities.includes(country) }"
+                  >
+                    <input v-model="form.cities" :value="country" type="checkbox" class="d-none" />
+                    <i class="bi me-1" :class="form.cities.includes(country) ? 'bi-check-circle-fill' : 'bi-circle'"></i>
+                    {{ country }}
+                  </label>
+                </div>
               </div>
+
+              <!-- Afrique maghrébine -->
+              <div class="p-3 rounded-3 bg-light border mb-2">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="small fw-bold text-slate">Afrique maghrébine (Maghreb)</span>
+                  <button type="button" class="btn btn-link btn-sm p-0 text-coral text-decoration-none" @click="toggleGroup(geoRegions.maghreb || [])">
+                    {{ isGroupSelected(geoRegions.maghreb || []) ? 'Décocher' : 'Tout sélectionner' }}
+                  </button>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                  <label
+                    v-for="country in geoRegions.maghreb || []"
+                    :key="country"
+                    class="city-chip"
+                    :class="{ 'is-selected': form.cities.includes(country) }"
+                  >
+                    <input v-model="form.cities" :value="country" type="checkbox" class="d-none" />
+                    <i class="bi me-1" :class="form.cities.includes(country) ? 'bi-check-circle-fill' : 'bi-circle'"></i>
+                    {{ country }}
+                  </label>
+                </div>
+              </div>
+
+              <!-- Reste des continents -->
+              <div class="p-3 rounded-3 bg-light border">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="small fw-bold text-slate">Autres continents</span>
+                  <button type="button" class="btn btn-link btn-sm p-0 text-coral text-decoration-none" @click="toggleGroup(geoRegions.continents || [])">
+                    {{ isGroupSelected(geoRegions.continents || []) ? 'Décocher' : 'Tout sélectionner' }}
+                  </button>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                  <label
+                    v-for="continent in geoRegions.continents || []"
+                    :key="continent"
+                    class="city-chip"
+                    :class="{ 'is-selected': form.cities.includes(continent) }"
+                  >
+                    <input v-model="form.cities" :value="continent" type="checkbox" class="d-none" />
+                    <i class="bi me-1" :class="form.cities.includes(continent) ? 'bi-check-circle-fill' : 'bi-circle'"></i>
+                    {{ continent }}
+                  </label>
+                </div>
+              </div>
+
               <div v-if="form.errors.cities" class="text-danger small mt-1">{{ form.errors.cities }}</div>
-              <div class="form-text">Sélectionnez une, plusieurs ou toutes les villes (obligatoire).</div>
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label small fw-semibold">Appareils</label>
-              <div class="d-flex flex-wrap gap-3">
-                <label class="form-check small">
-                  <input v-model="form.devices" value="mobile" type="checkbox" class="form-check-input coral-check" /> Mobile
-                </label>
-                <label class="form-check small">
-                  <input v-model="form.devices" value="desktop" type="checkbox" class="form-check-input coral-check" /> Desktop
-                </label>
-                <label class="form-check small">
-                  <input v-model="form.devices" value="tablet" type="checkbox" class="form-check-input coral-check" /> Tablette
-                </label>
-              </div>
-            </div>
-
-            <div class="mb-4">
-              <label class="form-label small fw-semibold">Catégories de sites</label>
-              <div class="d-flex flex-wrap gap-2">
-                <label v-for="cat in categories" :key="cat" class="form-check form-check-inline small">
-                  <input v-model="form.categories" :value="cat" type="checkbox" class="form-check-input coral-check" />
-                  <span class="form-check-label text-capitalize">{{ cat }}</span>
-                </label>
-              </div>
+              <div class="form-text">Diffusion automatique sur tous les appareils et tous les types de sites web.</div>
             </div>
 
             <!-- Mention obligatoire non négociable -->

@@ -1,6 +1,6 @@
 <script setup>
 import { Link, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import PublisherLayout from '../../../Layouts/PublisherLayout.vue';
 
 const props = defineProps({
@@ -13,20 +13,13 @@ const flashSuccess = computed(() => page.props.flash?.success);
 const flashError = computed(() => page.props.flash?.error);
 const copiedId = ref(null);
 
-const selectedFormat = ref(props.site.allowed_formats?.[0] || 'native');
-
 const autoAdsForm = useForm({
   auto_ads_enabled: props.site.auto_ads_enabled,
-  allowed_formats: [selectedFormat.value],
+  allowed_formats: [...(props.site.allowed_formats || ['native'])],
   custom_cdn_host: props.site.custom_cdn_host || '',
 });
 
-watch(selectedFormat, (val) => {
-  autoAdsForm.allowed_formats = [val];
-});
-
 function saveAutoAds() {
-  autoAdsForm.allowed_formats = [selectedFormat.value];
   autoAdsForm.patch(`/publisher/sites/${props.site.id}/auto-ads`, {
     preserveScroll: true,
   });
@@ -43,6 +36,7 @@ const formatMeta = {
   square_300x250: { title: 'Carré 300×250', placement: 'Dans l\'article / sidebar' },
   vertical_160x600: { title: 'Vertical 160×600', placement: 'Colonne latérale' },
   native: { title: 'Format Natif', placement: 'Entre paragraphes' },
+  modal: { title: 'Popup / Modal', placement: 'Fenêtre modale (1h)' },
 };
 </script>
 
@@ -100,20 +94,19 @@ const formatMeta = {
 
         <form @submit.prevent="saveAutoAds">
           <div class="mb-3">
-            <label class="form-label small fw-semibold mb-2">Types de publicités autorisées sur votre site * (1 seul format actif)</label>
+            <label class="form-label small fw-semibold mb-2">Types de publicités autorisées sur votre site *</label>
             <div class="row g-2">
               <div v-for="f in formats" :key="f.value" class="col-6 col-md-3">
                 <label
                   class="format-visual-card border rounded-3 p-2 h-100 d-flex flex-column cursor-pointer"
-                  :class="selectedFormat === f.value ? 'border-coral bg-coral-subtle' : 'bg-white'"
+                  :class="autoAdsForm.allowed_formats.includes(f.value) ? 'border-coral bg-coral-subtle' : 'bg-white'"
                 >
                   <div class="d-flex justify-content-between align-items-center mb-1">
                     <span class="fw-semibold text-slate" style="font-size: 0.75rem;">{{ formatMeta[f.value]?.title || f.label }}</span>
                     <input
-                      v-model="selectedFormat"
+                      v-model="autoAdsForm.allowed_formats"
                       :value="f.value"
-                      name="allowed_format"
-                      type="radio"
+                      type="checkbox"
                       class="form-check-input m-0 coral-check"
                     />
                   </div>
@@ -149,6 +142,12 @@ const formatMeta = {
                         <div class="col-4">
                           <div class="rounded-1 bg-coral text-white d-flex align-items-center justify-content-center fw-bold h-100" style="font-size: 0.45rem;">160×600</div>
                         </div>
+                      </div>
+                    </template>
+
+                    <template v-else-if="f.value === 'modal'">
+                      <div class="w-100 h-100 rounded-1 bg-dark bg-opacity-25 d-flex align-items-center justify-content-center">
+                        <div class="bg-coral text-white rounded-1 px-2 py-1 fw-bold" style="font-size: 0.5rem;">POPUP 1h</div>
                       </div>
                     </template>
 

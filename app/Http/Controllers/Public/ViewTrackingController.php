@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Public;
 
 use App\Enums\BillingModel;
 use App\Enums\CampaignStatus;
+use App\Enums\TransactionType;
 use App\Http\Controllers\Controller;
 use App\Models\AdSlotMetric;
 use App\Models\Campaign;
 use App\Models\Impression;
 use App\Models\Setting;
 use App\Models\StatsDaily;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AntiFraud\BotUserAgentList;
 use App\Services\Billing\LedgerService;
@@ -121,12 +123,20 @@ class ViewTrackingController extends Controller
                 return;
             }
 
-            $advWallet = $lockedCampaign->advertiser->wallet()->firstOrCreate(['user_id' => $lockedCampaign->advertiser_id]);
-            if ($advWallet->available_balance_xaf < $viewCostXaf) {
-                return;
-            }
+            $isPrepaid = Transaction::query()
+                ->where('reference_type', Campaign::class)
+                ->where('reference_id', $lockedCampaign->id)
+                ->where('type', TransactionType::AdSpend)
+                ->exists();
 
-            $ledger->debitForAdSpend($advWallet, $viewCostXaf, $lockedCampaign, __('Vue unique au scroll sur :name', ['name' => $lockedCampaign->name]));
+            if (! $isPrepaid) {
+                $advWallet = $lockedCampaign->advertiser->wallet()->firstOrCreate(['user_id' => $lockedCampaign->advertiser_id]);
+                if ($advWallet->available_balance_xaf < $viewCostXaf) {
+                    return;
+                }
+
+                $ledger->debitForAdSpend($advWallet, $viewCostXaf, $lockedCampaign, __('Vue unique au scroll sur :name', ['name' => $lockedCampaign->name]));
+            }
 
             $newSpent = $lockedCampaign->spent_xaf + $viewCostXaf;
             $updates = ['spent_xaf' => $newSpent];
