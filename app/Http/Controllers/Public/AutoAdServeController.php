@@ -283,14 +283,12 @@ JS;
 
             $html = "<a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:flex;gap:12px;align-items:center;max-width:720px;margin:16px auto;text-decoration:none;color:inherit;border:1px solid #e5e7eb;border-radius:10px;padding:10px;background:#fff;box-sizing:border-box;\">{$thumbTag}<div><div style=\"font-weight:600;font-size:14px;\">{$title}</div><div style=\"font-size:12px;color:#6b7280;\">{$body}</div></div></a>";
         } else {
-            $w = $dimensions['w'] ?? '300px';
-            $h = $dimensions['h'] ?? '250px';
-            $mediaStyle = "max-width:100%;width:auto;height:auto;max-height:{$h};object-fit:contain;border:0;border-radius:6px;display:block;margin:0 auto;";
+            $mediaStyle = 'max-width:100%;width:auto;height:auto;border:0;border-radius:6px;display:block;margin:0 auto;';
             $mediaTag = $creative->media_type === 'video'
                 ? "<video src=\"{$mediaUrl}\" autoplay muted loop playsinline preload=\"metadata\" style=\"{$mediaStyle}\"></video>"
                 : "<img src=\"{$mediaUrl}\" alt=\"{$title}\" loading=\"lazy\" style=\"{$mediaStyle}\">";
 
-            $html = "<div class=\"cm-rec-wrap\" style=\"max-width:{$w};width:100%;margin:16px auto;text-align:center;box-sizing:border-box;\"><a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:inline-block;max-width:100%;\">{$mediaTag}</a></div>";
+            $html = "<div class=\"cm-rec-wrap\" style=\"max-width:100%;margin:16px auto;text-align:center;box-sizing:border-box;\"><a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:inline-block;max-width:100%;\">{$mediaTag}</a></div>";
         }
 
         return [
