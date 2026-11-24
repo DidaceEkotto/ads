@@ -119,5 +119,38 @@ class AutoAdsTest extends TestCase
         $this->assertStringContainsString('cm-auto-slot', $response->getContent());
         $this->assertStringContainsString('IntersectionObserver', $response->getContent());
         $this->assertDatabaseCount('impressions', 1);
+        $this->assertDatabaseHas('stats_daily', [
+            'campaign_id' => $campaign->id,
+            'publisher_id' => $pub->id,
+            'site_id' => $site->id,
+            'impressions_count' => 1,
+        ]);
+
+        // Un clic réel d'un visiteur sur la pub met immédiatement à jour stats_daily pour annonceur & éditeur
+        $unescapedJs = str_replace(['\/', '\"'], ['/', '"'], $response->getContent());
+        preg_match('/https?:\/\/[^\s"\'<>]+?\/click\/([A-Za-z0-9_\-=.%]+)/', $unescapedJs, $matches);
+        $this->assertNotEmpty($matches[1] ?? null);
+
+        $this->withHeaders([
+            'User-Agent' => 'Mozilla/5.0 (Linux; Android 13; Mobile)',
+        ])->get('/click/'.urldecode($matches[1]))->assertRedirect('https://client.cm');
+
+        $this->assertDatabaseHas('stats_daily', [
+            'campaign_id' => $campaign->id,
+            'publisher_id' => $pub->id,
+            'site_id' => $site->id,
+            'valid_clicks_count' => 1,
+            'spend_xaf' => 50,
+            'publisher_earning_xaf' => 35,
+        ]);
+
+        // L'éditeur voit bien les emplacements Auto-Ads (> 0) dans /publisher/sites
+        $this->actingAs($pub)->get('/publisher/sites')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Publisher/Sites/Index')
+                ->where('sites.0.ad_zones_count', 1)
+                ->where('sites.0.auto_ads_enabled', true)
+            );
     }
 }

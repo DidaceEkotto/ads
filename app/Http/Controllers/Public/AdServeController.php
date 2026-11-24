@@ -38,7 +38,7 @@ class AdServeController extends Controller
 
         $visitorHash = $this->visitorHash($request);
 
-        ProcessAdImpressionJob::dispatch([
+        ProcessAdImpressionJob::dispatchSync([
             'campaign_id' => $creative->campaign_id,
             'creative_id' => $creative->id,
             'site_id' => $zone->site_id,

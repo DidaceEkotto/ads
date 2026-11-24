@@ -65,10 +65,10 @@ class AutoAdServeController extends Controller
             );
         }
 
-        // Si un seul format a retourné une pub, on décline sur plusieurs zones de la page (max 3)
-        if (count($placements) === 1 && $candidateFormats !== []) {
+        // Si moins de 4 emplacements ont été remplis, on décline sur plusieurs zones du site (max 4)
+        if (count($placements) > 0 && count($placements) < 4 && $candidateFormats !== []) {
             $fallbackFormat = $placements[0]['format'];
-            for ($extra = 1; $extra < 3; $extra++) {
+            for ($extra = count($placements); $extra < 4; $extra++) {
                 $creative = $selector->selectForSiteAndFormat($site, $fallbackFormat, [
                     'device' => $device,
                     'city' => $location['city'],
@@ -104,6 +104,9 @@ class AutoAdServeController extends Controller
 (function(){
   var items={$jsonPlacements};
   var viewUrl={$viewUrl};
+  function isInNavbar(el){
+    return !!(el && el.closest && el.closest('header, nav, .navbar'));
+  }
   function placeBelowNavbar(box){
     var nav=document.querySelector('header, nav, .navbar');
     if(nav&&nav.parentNode){
@@ -115,32 +118,40 @@ class AutoAdServeController extends Controller
       return true;
     }
     var main=document.querySelector('main, article');
-    if(main){main.prepend(box);return true;}
+    if(main&&!isInNavbar(main)){main.prepend(box);return true;}
     if(document.body){document.body.prepend(box);return true;}
     return false;
   }
-  function placeMiddle(box){
-    var sidebar=document.querySelector('aside, .sidebar');
-    if(sidebar){sidebar.appendChild(box);return true;}
-    var paras=document.querySelectorAll('article p, main p, p');
-    if(paras.length>=2){paras[1].insertAdjacentElement('afterend',box);return true;}
-    var sections=document.querySelectorAll('main > section, section');
-    if(sections.length>=2){sections[1].insertAdjacentElement('afterend',box);return true;}
-    if(sections.length===1){sections[0].insertAdjacentElement('afterend',box);return true;}
+  function placeInContent(box,slotIdx){
+    var sections=Array.prototype.filter.call(document.querySelectorAll('main > section, section, article'),function(el){return !isInNavbar(el);});
+    if(slotIdx===1){
+      var sidebar=document.querySelector('aside, .sidebar');
+      if(sidebar&&!isInNavbar(sidebar)){sidebar.appendChild(box);return true;}
+      if(sections.length>=1){sections[0].insertAdjacentElement('afterend',box);return true;}
+      var paras=Array.prototype.filter.call(document.querySelectorAll('article p, main p, p'),function(el){return !isInNavbar(el);});
+      if(paras.length>=2){paras[1].insertAdjacentElement('afterend',box);return true;}
+    }else if(slotIdx===2){
+      if(sections.length>=2){sections[Math.min(sections.length-1,2)].insertAdjacentElement('afterend',box);return true;}
+      var paras2=Array.prototype.filter.call(document.querySelectorAll('article p, main p, p'),function(el){return !isInNavbar(el);});
+      if(paras2.length>=4){paras2[3].insertAdjacentElement('afterend',box);return true;}
+    }
+    var footer=document.querySelector('footer, .footer');
+    if(footer&&footer.parentNode&&!isInNavbar(footer)){footer.insertAdjacentElement('beforebegin',box);return true;}
     var main=document.querySelector('main, article');
-    if(main){main.appendChild(box);return true;}
+    if(main&&!isInNavbar(main)){main.appendChild(box);return true;}
     if(document.body){document.body.appendChild(box);return true;}
     return false;
   }
   function placeBottom(box){
     var footer=document.querySelector('footer, .footer');
-    if(footer&&footer.parentNode){footer.insertAdjacentElement('beforebegin',box);return true;}
+    if(footer&&footer.parentNode&&!isInNavbar(footer)){footer.insertAdjacentElement('beforebegin',box);return true;}
     var main=document.querySelector('main, article');
-    if(main){main.appendChild(box);return true;}
+    if(main&&!isInNavbar(main)){main.appendChild(box);return true;}
     if(document.body){document.body.appendChild(box);return true;}
     return false;
   }
   function mount(){
+    if(document.querySelector('.cm-auto-slot'))return;
     items.forEach(function(item,idx){
       var box=document.createElement('div');
       box.className='cm-auto-slot';
@@ -148,8 +159,8 @@ class AutoAdServeController extends Controller
       box.innerHTML=item.html;
       if(idx===0){
         placeBelowNavbar(box);
-      }else if(idx===1){
-        placeMiddle(box);
+      }else if(idx===1||idx===2){
+        placeInContent(box,idx);
       }else{
         placeBottom(box);
       }
@@ -167,6 +178,9 @@ class AutoAdServeController extends Controller
   }
   if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',mount);}
   else{mount();}
+  setTimeout(mount,700);
+  window.addEventListener('popstate',function(){setTimeout(mount,300);});
+  window.addEventListener('hashchange',function(){setTimeout(mount,300);});
 })();
 JS;
 
@@ -191,7 +205,7 @@ JS;
         bool $recordImpression = true
     ): array {
         if ($recordImpression) {
-            ProcessAdImpressionJob::dispatch([
+            ProcessAdImpressionJob::dispatchSync([
                 'campaign_id' => $creative->campaign_id,
                 'creative_id' => $creative->id,
                 'site_id' => $site->id,

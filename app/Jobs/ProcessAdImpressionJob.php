@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Impression;
+use App\Models\StatsDaily;
 use App\Services\Geo\GeoLocationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -51,8 +52,17 @@ class ProcessAdImpressionJob implements ShouldQueue
             'created_at' => now(),
         ]);
 
-        // Compteur rapide en cache/Redis pour le suivi temps réel
+        // Compteur rapide en cache/Redis et mise à jour temps réel de stats_daily
         $dateKey = now()->format('Y-m-d');
         Cache::increment("rt_imp:{$dateKey}:c:{$this->data['campaign_id']}");
+
+        StatsDaily::recordRealTime(
+            campaignId: (int) $this->data['campaign_id'],
+            publisherId: (int) $this->data['publisher_id'],
+            siteId: isset($this->data['site_id']) ? (int) $this->data['site_id'] : null,
+            adZoneId: isset($this->data['ad_zone_id']) ? (int) $this->data['ad_zone_id'] : null,
+            deviceType: (string) ($this->data['device_type'] ?? 'desktop'),
+            increments: ['impressions_count' => 1],
+        );
     }
 }

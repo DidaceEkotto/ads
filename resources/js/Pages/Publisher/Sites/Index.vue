@@ -112,7 +112,10 @@ function submit() {
                     <div class="small text-muted">{{ s.domain }}</div>
                   </td>
                   <td class="text-capitalize small">{{ s.category }} ({{ s.language.toUpperCase() }})</td>
-                  <td>{{ s.ad_zones_count }}</td>
+                  <td>
+                    <span class="fw-semibold">{{ s.ad_zones_count }}</span>
+                    <span v-if="s.auto_ads_enabled" class="badge bg-success-subtle text-success ms-1">Auto</span>
+                  </td>
                   <td>
                     <span
                       class="badge"

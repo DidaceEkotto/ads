@@ -52,7 +52,7 @@ class SocialRedirectController extends Controller
             ? 'mobile'
             : 'desktop';
 
-        ProcessAdClickJob::dispatch([
+        ProcessAdClickJob::dispatchSync([
             'campaign_id' => $link->campaign_id,
             'creative_id' => $creative->id,
             'site_id' => null,

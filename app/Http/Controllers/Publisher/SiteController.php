@@ -32,7 +32,8 @@ class SiteController extends Controller
                 'status' => $s->status->value,
                 'status_label' => $s->status->label(),
                 'rejection_reason' => $s->rejection_reason,
-                'ad_zones_count' => $s->ad_zones_count,
+                'auto_ads_enabled' => (bool) $s->auto_ads_enabled,
+                'ad_zones_count' => $s->ad_zones_count + ($s->auto_ads_enabled ? count($s->allowed_formats ?: ['native', 'square_300x250']) : 0),
             ]);
 
         return Inertia::render('Publisher/Sites/Index', [

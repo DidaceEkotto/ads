@@ -9,6 +9,7 @@ use App\Models\Campaign;
 use App\Models\Click;
 use App\Models\FraudFlag;
 use App\Models\Setting;
+use App\Models\StatsDaily;
 use App\Models\User;
 use App\Services\AntiFraud\ClickFraudDetector;
 use App\Services\Billing\LedgerService;
@@ -102,6 +103,15 @@ class ProcessAdClickJob implements ShouldQueue
                 ],
             ]);
 
+            StatsDaily::recordRealTime(
+                campaignId: $campaign->id,
+                publisherId: $publisher->id,
+                siteId: isset($this->data['site_id']) ? (int) $this->data['site_id'] : null,
+                adZoneId: isset($this->data['ad_zone_id']) ? (int) $this->data['ad_zone_id'] : null,
+                deviceType: (string) ($this->data['device_type'] ?? 'desktop'),
+                increments: ['invalid_clicks_count' => 1],
+            );
+
             return;
         }
 
@@ -182,6 +192,20 @@ class ProcessAdClickJob implements ShouldQueue
                 $pubWallet = $publisher->wallet()->firstOrCreate(['user_id' => $publisher->id]);
                 $ledger->creditPendingPublisherEarning($pubWallet, $publisherEarning, $click, __('Clic valide'));
             }
+
+            StatsDaily::recordRealTime(
+                campaignId: $lockedCampaign->id,
+                publisherId: $publisher->id,
+                siteId: isset($this->data['site_id']) ? (int) $this->data['site_id'] : null,
+                adZoneId: isset($this->data['ad_zone_id']) ? (int) $this->data['ad_zone_id'] : null,
+                deviceType: (string) ($this->data['device_type'] ?? 'desktop'),
+                increments: [
+                    'valid_clicks_count' => 1,
+                    'spend_xaf' => $costXaf,
+                    'publisher_earning_xaf' => $publisherEarning,
+                    'platform_fee_xaf' => $platformFee,
+                ],
+            );
         });
     }
 }

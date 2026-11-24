@@ -33,7 +33,7 @@ class ClickTrackingController extends Controller
 
         $device = str_contains(strtolower((string) $ua), 'mobile') ? 'mobile' : 'desktop';
 
-        ProcessAdClickJob::dispatch([
+        ProcessAdClickJob::dispatchSync([
             'campaign_id' => (int) $payload['campaign_id'],
             'creative_id' => isset($payload['creative_id']) ? (int) $payload['creative_id'] : null,
             'site_id' => isset($payload['site_id']) ? (int) $payload['site_id'] : null,
