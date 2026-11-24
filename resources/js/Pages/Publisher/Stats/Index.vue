@@ -12,6 +12,7 @@ defineProps({
   byGeo: { type: Array, required: true },
   dailyStats: { type: Array, required: true },
   recentClicks: { type: Array, required: true },
+  slotPerformance: { type: Array, default: () => [] },
 });
 
 const refreshing = ref(false);
@@ -338,6 +339,49 @@ function refreshStats() {
       </div>
     </div>
 
+    <!-- Performance IA des emplacements (Thompson Sampling) -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+      <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+        <h2 class="h6 fw-bold text-slate mb-0">
+          <i class="bi bi-cpu text-coral me-2"></i>Optimisation IA des emplacements (Thompson Sampling)
+        </h2>
+        <span class="badge bg-coral-subtle text-coral">Apprentissage temps réel</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light small">
+            <tr>
+              <th>Site</th>
+              <th>Emplacement DOM</th>
+              <th>Appareil</th>
+              <th class="text-end">Vues</th>
+              <th class="text-end">Vues réelles (Viewability)</th>
+              <th class="text-end">Clics</th>
+              <th class="text-end">CTR</th>
+              <th class="text-end">Gains générés</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="sp in slotPerformance" :key="sp.id">
+              <td class="fw-semibold">{{ sp.site_name }}</td>
+              <td><code>{{ sp.slot_key }}</code></td>
+              <td class="text-capitalize small">{{ sp.device_type }}</td>
+              <td class="text-end">{{ formatNumber(sp.impressions_count) }}</td>
+              <td class="text-end">{{ formatNumber(sp.viewable_count) }} ({{ sp.viewability_rate }} %)</td>
+              <td class="text-end text-success fw-semibold">{{ formatNumber(sp.clicks_count) }}</td>
+              <td class="text-end">{{ sp.ctr }} %</td>
+              <td class="text-end fw-bold text-coral">{{ formatXaf(sp.earnings_xaf) }}</td>
+            </tr>
+            <tr v-if="!slotPerformance.length">
+              <td colspan="8" class="text-center text-muted py-3">
+                Les scores par emplacement apparaîtront dès les premières visites sur votre site.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Journal des clics en direct -->
     <div class="card border-0 shadow-sm rounded-4">
       <div class="card-header bg-white py-3 border-bottom">
@@ -384,6 +428,7 @@ function refreshStats() {
 <style scoped>
 .text-slate { color: #192733; }
 .text-coral { color: #ff5c35 !important; }
+.bg-coral-subtle { background-color: #fff1ed !important; }
 .btn-coral {
   background-color: #ff5c35;
   border-color: #ff5c35;

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Public;
 use App\Enums\BillingModel;
 use App\Enums\CampaignStatus;
 use App\Http\Controllers\Controller;
+use App\Models\AdSlotMetric;
 use App\Models\Campaign;
 use App\Models\Setting;
 use App\Models\User;
@@ -38,6 +39,18 @@ class ViewTrackingController extends Controller
         $campaignId = (int) ($payload['campaign_id'] ?? 0);
         $publisherId = (int) ($payload['publisher_id'] ?? 0);
         $visitorHash = hash('sha256', ($request->ip() ?? '').'|'.($request->userAgent() ?? ''));
+
+        // Remontée temps réel de la visibilité réelle (viewability) pour Thompson Sampling
+        if (! empty($payload['site_id']) && ! empty($payload['slot_key'])) {
+            $slotDedupKey = "slot_view_dedup:{$payload['site_id']}:{$payload['slot_key']}:{$visitorHash}";
+            if (Cache::add($slotDedupKey, 1, now()->addMinutes(10))) {
+                AdSlotMetric::recordViewable(
+                    (int) $payload['site_id'],
+                    (string) $payload['slot_key'],
+                    (string) ($payload['device_type'] ?? 'desktop')
+                );
+            }
+        }
 
         // Déduplication : 1 vue facturable max par visiteur / campagne toutes les 10 minutes
         $dedupKey = "view_dedup:{$campaignId}:{$visitorHash}";

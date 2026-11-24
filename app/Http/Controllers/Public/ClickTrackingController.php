@@ -38,6 +38,7 @@ class ClickTrackingController extends Controller
             'creative_id' => isset($payload['creative_id']) ? (int) $payload['creative_id'] : null,
             'site_id' => isset($payload['site_id']) ? (int) $payload['site_id'] : null,
             'ad_zone_id' => isset($payload['ad_zone_id']) ? (int) $payload['ad_zone_id'] : null,
+            'slot_key' => $payload['slot_key'] ?? null,
             'social_placement_id' => null,
             'tracking_link_id' => null,
             'publisher_id' => (int) $payload['publisher_id'],

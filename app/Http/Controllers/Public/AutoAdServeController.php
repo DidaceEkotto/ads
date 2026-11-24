@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessAdImpressionJob;
+use App\Models\AdSlotMetric;
 use App\Models\Site;
 use App\Services\AdSelection\AdSelectorService;
+use App\Services\AdSelection\SlotBanditService;
 use App\Services\Geo\GeoLocationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -21,7 +23,8 @@ class AutoAdServeController extends Controller
         Request $request,
         string $siteToken,
         AdSelectorService $selector,
-        GeoLocationService $geo
+        GeoLocationService $geo,
+        SlotBanditService $bandit
     ): Response {
         $site = Site::query()->where('site_token', $siteToken)->first();
 
@@ -37,9 +40,10 @@ class AutoAdServeController extends Controller
         $placements = [];
         $recordedCreativeIds = [];
         $candidateFormats = array_values(array_unique($formats));
+        $rankedSlots = $bandit->rankSlots($site->id, $device, 4);
 
-        // On tente d'abord de remplir jusqu'à 3 emplacements distincts avec les formats autorisés
-        foreach (array_slice($candidateFormats, 0, 3) as $format) {
+        // On tente d'abord de remplir jusqu'à 4 emplacements classés par Thompson Sampling
+        foreach (array_slice($candidateFormats, 0, 4) as $format) {
             $creative = $selector->selectForSiteAndFormat($site, $format, [
                 'device' => $device,
                 'city' => $location['city'],
@@ -50,6 +54,7 @@ class AutoAdServeController extends Controller
                 continue;
             }
 
+            $slotKey = $rankedSlots[count($placements)] ?? 'below_navbar';
             $shouldRecord = ! in_array($creative->id, $recordedCreativeIds, true);
             $recordedCreativeIds[] = $creative->id;
 
@@ -58,6 +63,7 @@ class AutoAdServeController extends Controller
                 $site,
                 $creative,
                 $format,
+                $slotKey,
                 $visitorHash,
                 $location,
                 $device,
@@ -65,7 +71,7 @@ class AutoAdServeController extends Controller
             );
         }
 
-        // Si moins de 4 emplacements ont été remplis, on décline sur plusieurs zones du site (max 4)
+        // Si moins de 4 emplacements ont été remplis, on décline sur les meilleurs emplacements IA restants
         if (count($placements) > 0 && count($placements) < 4 && $candidateFormats !== []) {
             $fallbackFormat = $placements[0]['format'];
             for ($extra = count($placements); $extra < 4; $extra++) {
@@ -77,6 +83,7 @@ class AutoAdServeController extends Controller
                 if (! $creative) {
                     break;
                 }
+                $slotKey = $rankedSlots[$extra] ?? 'before_footer';
                 $shouldRecord = ! in_array($creative->id, $recordedCreativeIds, true);
                 $recordedCreativeIds[] = $creative->id;
 
@@ -85,6 +92,7 @@ class AutoAdServeController extends Controller
                     $site,
                     $creative,
                     $fallbackFormat,
+                    $slotKey,
                     $visitorHash,
                     $location,
                     $device,
@@ -105,7 +113,17 @@ class AutoAdServeController extends Controller
   var items={$jsonPlacements};
   var viewUrl={$viewUrl};
   function isInNavbar(el){
-    return !!(el && el.closest && el.closest('header, nav, .navbar'));
+    return !!(el && el.closest && el.closest('header, nav, .navbar, form, [role="dialog"]'));
+  }
+  function tooCloseToExisting(el){
+    if(!el||!el.getBoundingClientRect)return false;
+    var r=el.getBoundingClientRect();
+    var existing=document.querySelectorAll('.cm-auto-slot');
+    for(var i=0;i<existing.length;i++){
+      var er=existing[i].getBoundingClientRect();
+      if(Math.abs(er.top-r.top)<300)return true;
+    }
+    return false;
   }
   function placeBelowNavbar(box){
     var nav=document.querySelector('header, nav, .navbar');
@@ -122,27 +140,24 @@ class AutoAdServeController extends Controller
     if(document.body){document.body.prepend(box);return true;}
     return false;
   }
-  function placeInContent(box,slotIdx){
-    var sections=Array.prototype.filter.call(document.querySelectorAll('main > section, section, article'),function(el){return !isInNavbar(el);});
-    if(slotIdx===1){
-      var sidebar=document.querySelector('aside, .sidebar');
-      if(sidebar&&!isInNavbar(sidebar)){sidebar.appendChild(box);return true;}
-      if(sections.length>=1){sections[0].insertAdjacentElement('afterend',box);return true;}
-      var paras=Array.prototype.filter.call(document.querySelectorAll('article p, main p, p'),function(el){return !isInNavbar(el);});
-      if(paras.length>=2){paras[1].insertAdjacentElement('afterend',box);return true;}
-    }else if(slotIdx===2){
-      if(sections.length>=2){sections[Math.min(sections.length-1,2)].insertAdjacentElement('afterend',box);return true;}
-      var paras2=Array.prototype.filter.call(document.querySelectorAll('article p, main p, p'),function(el){return !isInNavbar(el);});
-      if(paras2.length>=4){paras2[3].insertAdjacentElement('afterend',box);return true;}
+  function placeByHeuristic(box,slotKey){
+    if(slotKey==='below_navbar'){return placeBelowNavbar(box);}
+    if(slotKey==='sidebar'){
+      var sb=document.querySelector('aside, .sidebar');
+      if(sb&&!isInNavbar(sb)&&sb.offsetWidth>=160){sb.appendChild(box);return true;}
     }
-    var footer=document.querySelector('footer, .footer');
-    if(footer&&footer.parentNode&&!isInNavbar(footer)){footer.insertAdjacentElement('beforebegin',box);return true;}
-    var main=document.querySelector('main, article');
-    if(main&&!isInNavbar(main)){main.appendChild(box);return true;}
-    if(document.body){document.body.appendChild(box);return true;}
-    return false;
-  }
-  function placeBottom(box){
+    if(slotKey==='after_p2'){
+      var paras=Array.prototype.filter.call(document.querySelectorAll('article p, main p, p'),function(el){return !isInNavbar(el)&&(el.textContent||'').trim().length>40;});
+      for(var i=1;i<paras.length;i++){
+        if(!tooCloseToExisting(paras[i])){paras[i].insertAdjacentElement('afterend',box);return true;}
+      }
+    }
+    if(slotKey==='mid_section'){
+      var secs=Array.prototype.filter.call(document.querySelectorAll('main > section, section, article'),function(el){return !isInNavbar(el)&&el.offsetHeight>=120;});
+      for(var j=0;j<secs.length;j++){
+        if(!tooCloseToExisting(secs[j])){secs[j].insertAdjacentElement('afterend',box);return true;}
+      }
+    }
     var footer=document.querySelector('footer, .footer');
     if(footer&&footer.parentNode&&!isInNavbar(footer)){footer.insertAdjacentElement('beforebegin',box);return true;}
     var main=document.querySelector('main, article');
@@ -152,18 +167,13 @@ class AutoAdServeController extends Controller
   }
   function mount(){
     if(document.querySelector('.cm-auto-slot'))return;
-    items.forEach(function(item,idx){
+    items.forEach(function(item){
       var box=document.createElement('div');
       box.className='cm-auto-slot';
+      box.setAttribute('data-cm-slot',item.slot_key||'auto');
       box.style.cssText='position:static;display:block;clear:both;width:100%;margin:12px 0;';
       box.innerHTML=item.html;
-      if(idx===0){
-        placeBelowNavbar(box);
-      }else if(idx===1||idx===2){
-        placeInContent(box,idx);
-      }else{
-        placeBottom(box);
-      }
+      placeByHeuristic(box,item.slot_key||'below_navbar');
       if('IntersectionObserver' in window && box.parentNode){
         var sent=false;
         var obs=new IntersectionObserver(function(e){
@@ -199,11 +209,14 @@ JS;
         Site $site,
         \App\Models\Creative $creative,
         string $format,
+        string $slotKey,
         string $visitorHash,
         array $location,
         string $device,
         bool $recordImpression = true
     ): array {
+        AdSlotMetric::recordImpression($site->id, $slotKey, $device);
+
         if ($recordImpression) {
             ProcessAdImpressionJob::dispatchSync([
                 'campaign_id' => $creative->campaign_id,
@@ -224,6 +237,7 @@ JS;
             'creative_id' => $creative->id,
             'site_id' => $site->id,
             'ad_zone_id' => null,
+            'slot_key' => $slotKey,
             'publisher_id' => $site->publisher_id,
             'destination_url' => $creative->destination_url,
             'exp' => now()->addHours(6)->timestamp,
@@ -232,6 +246,9 @@ JS;
         $viewToken = Crypt::encryptString(json_encode([
             'campaign_id' => $creative->campaign_id,
             'publisher_id' => $site->publisher_id,
+            'site_id' => $site->id,
+            'slot_key' => $slotKey,
+            'device_type' => $device,
             'exp' => now()->addHours(6)->timestamp,
         ], JSON_THROW_ON_ERROR));
 
@@ -267,6 +284,7 @@ JS;
 
         return [
             'format' => $format,
+            'slot_key' => $slotKey,
             'html' => $html,
             'view_token' => $viewToken,
         ];

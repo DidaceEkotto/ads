@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Publisher;
 
 use App\Http\Controllers\Controller;
+use App\Models\AdSlotMetric;
 use App\Models\Campaign;
 use App\Models\Click;
 use App\Models\Impression;
@@ -283,6 +284,33 @@ class StatsController extends Controller
                 'earning_status' => $c->earning_status,
             ]);
 
+        // Performance IA des emplacements (Thompson Sampling en temps réel)
+        $siteIds = $user->sites()->pluck('id');
+        $slotPerformance = AdSlotMetric::query()
+            ->with('site:id,name')
+            ->whereIn('site_id', $siteIds)
+            ->orderByDesc('earnings_xaf')
+            ->orderByDesc('clicks_count')
+            ->get()
+            ->map(function (AdSlotMetric $m) {
+                $imp = $m->impressions_count;
+                $viewable = $m->viewable_count;
+                $clicks = $m->clicks_count;
+
+                return [
+                    'id' => $m->id,
+                    'site_name' => $m->site?->name ?? "Site #{$m->site_id}",
+                    'slot_key' => $m->slot_key,
+                    'device_type' => $m->device_type,
+                    'impressions_count' => $imp,
+                    'viewable_count' => $viewable,
+                    'viewability_rate' => $imp > 0 ? round(($viewable / $imp) * 100, 1) : 0,
+                    'clicks_count' => $clicks,
+                    'ctr' => $imp > 0 ? round(($clicks / $imp) * 100, 2) : 0,
+                    'earnings_xaf' => $m->earnings_xaf,
+                ];
+            });
+
         return Inertia::render('Publisher/Stats/Index', [
             'summary' => [
                 'total_impressions' => $totalImpressions,
@@ -308,6 +336,7 @@ class StatsController extends Controller
             'byGeo' => $byGeo,
             'dailyStats' => $dailyStats,
             'recentClicks' => $recentClicks,
+            'slotPerformance' => $slotPerformance,
         ]);
     }
 }

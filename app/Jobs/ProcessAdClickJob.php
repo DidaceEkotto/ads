@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Enums\BillingModel;
 use App\Enums\CampaignStatus;
 use App\Events\CampaignBudgetLow;
+use App\Models\AdSlotMetric;
 use App\Models\Campaign;
 use App\Models\Click;
 use App\Models\FraudFlag;
@@ -191,6 +192,15 @@ class ProcessAdClickJob implements ShouldQueue
             if ($publisherEarning > 0) {
                 $pubWallet = $publisher->wallet()->firstOrCreate(['user_id' => $publisher->id]);
                 $ledger->creditPendingPublisherEarning($pubWallet, $publisherEarning, $click, __('Clic valide'));
+            }
+
+            if (! empty($this->data['site_id']) && ! empty($this->data['slot_key'])) {
+                AdSlotMetric::recordClick(
+                    (int) $this->data['site_id'],
+                    (string) $this->data['slot_key'],
+                    (string) ($this->data['device_type'] ?? 'desktop'),
+                    $publisherEarning
+                );
             }
 
             StatsDaily::recordRealTime(
