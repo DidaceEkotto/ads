@@ -98,6 +98,16 @@ class AdSelectorService
             return null;
         }
 
+        $excludeIds = array_map('intval', $context['exclude_creative_ids'] ?? []);
+        if ($excludeIds !== []) {
+            $unseenCreatives = $eligibleCreatives->reject(
+                fn (Creative $c) => in_array($c->id, $excludeIds, true)
+            );
+            if ($unseenCreatives->isNotEmpty()) {
+                return $unseenCreatives->random();
+            }
+        }
+
         // Rotation aléatoire équitable parmi les créatives éligibles
         return $eligibleCreatives->random();
     }

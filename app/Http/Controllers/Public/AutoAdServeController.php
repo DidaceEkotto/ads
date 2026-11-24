@@ -39,21 +39,25 @@ class AutoAdServeController extends Controller
 
         $placements = [];
         $recordedCreativeIds = [];
+        $usedCreativeIds = [];
         $candidateFormats = array_values(array_unique($formats));
+        shuffle($candidateFormats);
         $rankedSlots = $bandit->rankSlots($site->id, $device, 4);
 
-        // On tente d'abord de remplir jusqu'à 4 emplacements classés par Thompson Sampling
+        // On tente d'abord de remplir jusqu'à 4 emplacements classés par Thompson Sampling avec rotation aléatoire
         foreach (array_slice($candidateFormats, 0, 4) as $format) {
             $creative = $selector->selectForSiteAndFormat($site, $format, [
                 'device' => $device,
                 'city' => $location['city'],
                 'language' => $site->language ?? 'fr',
+                'exclude_creative_ids' => $usedCreativeIds,
             ]);
 
             if (! $creative) {
                 continue;
             }
 
+            $usedCreativeIds[] = $creative->id;
             $slotKey = $rankedSlots[count($placements)] ?? 'below_navbar';
             $shouldRecord = ! in_array($creative->id, $recordedCreativeIds, true);
             $recordedCreativeIds[] = $creative->id;
@@ -71,18 +75,20 @@ class AutoAdServeController extends Controller
             );
         }
 
-        // Si moins de 4 emplacements ont été remplis, on décline sur les meilleurs emplacements IA restants
+        // Si moins de 4 emplacements ont été remplis, on complète aléatoirement avec les autres publicités disponibles
         if (count($placements) > 0 && count($placements) < 4 && $candidateFormats !== []) {
-            $fallbackFormat = $placements[0]['format'];
             for ($extra = count($placements); $extra < 4; $extra++) {
+                $fallbackFormat = $candidateFormats[array_rand($candidateFormats)];
                 $creative = $selector->selectForSiteAndFormat($site, $fallbackFormat, [
                     'device' => $device,
                     'city' => $location['city'],
                     'language' => $site->language ?? 'fr',
+                    'exclude_creative_ids' => $usedCreativeIds,
                 ]);
                 if (! $creative) {
                     break;
                 }
+                $usedCreativeIds[] = $creative->id;
                 $slotKey = $rankedSlots[$extra] ?? 'before_footer';
                 $shouldRecord = ! in_array($creative->id, $recordedCreativeIds, true);
                 $recordedCreativeIds[] = $creative->id;

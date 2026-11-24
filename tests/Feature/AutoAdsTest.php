@@ -153,4 +153,64 @@ class AutoAdsTest extends TestCase
                 ->where('sites.0.auto_ads_enabled', true)
             );
     }
+
+    public function test_auto_ads_rotates_randomly_across_multiple_available_ads(): void
+    {
+        $adv = User::query()->create([
+            'name' => 'Adv Multi',
+            'email' => 'advmulti@cm.cm',
+            'phone' => '+237677111777',
+            'role' => UserRole::Advertiser,
+            'password' => 'Secret1234',
+        ]);
+        $adv->wallet()->create(['available_balance_xaf' => 50000]);
+
+        $pub = User::query()->create([
+            'name' => 'Pub Multi',
+            'email' => 'pubmulti@cm.cm',
+            'phone' => '+237699222777',
+            'role' => UserRole::Publisher,
+            'password' => 'Secret1234',
+        ]);
+
+        $site = Site::query()->create([
+            'publisher_id' => $pub->id,
+            'name' => 'Site Rotation',
+            'domain' => 'rotation.cm',
+            'category' => 'tech',
+            'language' => 'fr',
+            'status' => SiteStatus::Approved,
+            'site_token' => 'rotatetoken123456',
+            'auto_ads_enabled' => true,
+            'allowed_formats' => [AdZoneFormat::Native->value],
+        ]);
+
+        foreach (['Pub Alpha', 'Pub Beta'] as $idx => $title) {
+            $c = Campaign::query()->create([
+                'advertiser_id' => $adv->id,
+                'name' => "Campagne {$idx}",
+                'type' => CampaignType::Web,
+                'billing_model' => BillingModel::Cpc,
+                'status' => CampaignStatus::Active,
+                'total_budget_xaf' => 20000,
+                'daily_budget_xaf' => 2000,
+                'unit_price_xaf' => 50,
+                'starts_at' => now()->subDay(),
+                'ends_at' => now()->addDays(5),
+            ]);
+            $c->creatives()->create([
+                'title' => $title,
+                'destination_url' => 'https://client.cm',
+                'media_type' => 'image',
+                'media_path' => "creatives/demo{$idx}.png",
+                'format' => AdZoneFormat::Native->value,
+                'file_size_bytes' => 1024,
+            ]);
+        }
+
+        $res = $this->get("/a/{$site->site_token}.js")->assertOk();
+        $content = $res->getContent();
+        $this->assertStringContainsString('Pub Alpha', $content);
+        $this->assertStringContainsString('Pub Beta', $content);
+    }
 }
