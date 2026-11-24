@@ -40,11 +40,12 @@ class AutoAdServeController extends Controller
         $placements = [];
         $recordedCreativeIds = [];
         $usedCreativeIds = [];
+        $workingFormats = [];
         $candidateFormats = array_values(array_unique($formats));
         shuffle($candidateFormats);
         $rankedSlots = $bandit->rankSlots($site->id, $device, 4);
 
-        // On tente d'abord de remplir jusqu'à 4 emplacements classés par Thompson Sampling avec rotation aléatoire
+        // 1. On remplit d'abord avec les différents formats autorisés qui ont des publicités actives
         foreach (array_slice($candidateFormats, 0, 4) as $format) {
             $creative = $selector->selectForSiteAndFormat($site, $format, [
                 'device' => $device,
@@ -57,6 +58,7 @@ class AutoAdServeController extends Controller
                 continue;
             }
 
+            $workingFormats[] = $format;
             $usedCreativeIds[] = $creative->id;
             $slotKey = $rankedSlots[count($placements)] ?? 'below_navbar';
             $shouldRecord = ! in_array($creative->id, $recordedCreativeIds, true);
@@ -75,10 +77,13 @@ class AutoAdServeController extends Controller
             );
         }
 
-        // Si moins de 4 emplacements ont été remplis, on complète aléatoirement avec les autres publicités disponibles
-        if (count($placements) > 0 && count($placements) < 4 && $candidateFormats !== []) {
-            for ($extra = count($placements); $extra < 4; $extra++) {
-                $fallbackFormat = $candidateFormats[array_rand($candidateFormats)];
+        // 2. Garantit minimum 3 publicités par page (jusqu'à 4) en piochant aléatoirement parmi les formats actifs
+        if ($workingFormats !== []) {
+            $targetCount = max(3, min(4, count($workingFormats) + 2));
+            $attempts = 0;
+            while (count($placements) < $targetCount && $attempts < 10) {
+                $attempts++;
+                $fallbackFormat = $workingFormats[array_rand($workingFormats)];
                 $creative = $selector->selectForSiteAndFormat($site, $fallbackFormat, [
                     'device' => $device,
                     'city' => $location['city'],
@@ -86,10 +91,10 @@ class AutoAdServeController extends Controller
                     'exclude_creative_ids' => $usedCreativeIds,
                 ]);
                 if (! $creative) {
-                    break;
+                    continue;
                 }
                 $usedCreativeIds[] = $creative->id;
-                $slotKey = $rankedSlots[$extra] ?? 'before_footer';
+                $slotKey = $rankedSlots[count($placements)] ?? 'before_footer';
                 $shouldRecord = ! in_array($creative->id, $recordedCreativeIds, true);
                 $recordedCreativeIds[] = $creative->id;
 
@@ -280,12 +285,12 @@ JS;
         } else {
             $w = $dimensions['w'] ?? '300px';
             $h = $dimensions['h'] ?? '250px';
-            $mediaStyle = "width:100%;height:{$h};object-fit:cover;border:0;border-radius:6px;display:block;";
+            $mediaStyle = "max-width:100%;width:auto;height:auto;max-height:{$h};object-fit:contain;border:0;border-radius:6px;display:block;margin:0 auto;";
             $mediaTag = $creative->media_type === 'video'
                 ? "<video src=\"{$mediaUrl}\" autoplay muted loop playsinline preload=\"metadata\" style=\"{$mediaStyle}\"></video>"
                 : "<img src=\"{$mediaUrl}\" alt=\"{$title}\" loading=\"lazy\" style=\"{$mediaStyle}\">";
 
-            $html = "<div class=\"cm-rec-wrap\" style=\"width:{$w};max-width:100%;height:{$h};margin:16px auto;overflow:hidden;border-radius:6px;box-sizing:border-box;\"><a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:block;width:100%;height:100%;\">{$mediaTag}</a></div>";
+            $html = "<div class=\"cm-rec-wrap\" style=\"max-width:{$w};width:100%;margin:16px auto;text-align:center;box-sizing:border-box;\"><a href=\"{$clickUrl}\" target=\"_blank\" rel=\"noopener sponsored\" class=\"cm-rec-card\" style=\"display:inline-block;max-width:100%;\">{$mediaTag}</a></div>";
         }
 
         return [
